@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "JOOLA AI CS Warranty Management — Fastify API. Orchestrates Vapi webhooks, customer demo intake, case lifecycle, and CSV exports between the dashboard, Python AI agents, and Supabase.",
+  "description": "JOOLA AI CS Warranty Management — Fastify API. Orchestrates Vapi webhooks, intake, case lifecycle, and CSV exports between dashboard, Python AI agents, and Supabase.",
   "scripts": {
     "dev": "tsx watch --env-file=.env.local src/index.ts",
     "build": "tsc",

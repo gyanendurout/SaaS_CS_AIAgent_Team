@@ -2,6 +2,7 @@
   "name": "@joola/dashboard",
   "version": "0.1.0",
   "private": true,
+  "description": "JOOLA CS Dashboard — real-time agent monitoring and case management.",
   "scripts": {
     "dev": "next dev -p 3000",
     "build": "next build",
