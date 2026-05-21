@@ -1,0 +1,22 @@
+{
+  "type": "function",
+  "function": {
+    "name": "lookup_order",
+    "description": "Look up an order by order number or by customer email. Returns the order details including product, source (JOOLA direct vs unauthorized retailer), purchase date, and customer info. Call this when the customer mentions an order number or asks about a specific purchase. Provide exactly one of order_number or customer_email.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "order_number": {
+          "type": "string",
+          "description": "Order number like '1234' or 'JL-1234'. Omit if searching by email."
+        },
+        "customer_email": {
+          "type": "string",
+          "description": "Customer's email address used at purchase. Omit if searching by order number.",
+          "format": "email"
+        }
+      },
+      "required": []
+    }
+  }
+}

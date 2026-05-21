@@ -1,0 +1,13 @@
+{
+  "name": "@joola/vapi-assistant-config",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Vapi assistant configuration assets for JOOLA CS Warranty Management System — system prompt, knowledge base, tool function-call schemas, and assistant POST body template. Consumed by @joola/vapi-setup scripts.",
+  "files": [
+    "system-prompt.md",
+    "knowledge-base.md",
+    "assistant.json",
+    "tools"
+  ]
+}

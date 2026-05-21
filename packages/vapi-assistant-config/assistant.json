@@ -1,0 +1,24 @@
+{
+  "name": "JOOLA CS Warranty Assistant",
+  "model": {
+    "provider": "openai",
+    "model": "gpt-4o",
+    "temperature": 0.5,
+    "systemPrompt": "__SYSTEM_PROMPT__",
+    "tools": "__TOOLS__"
+  },
+  "voice": {
+    "provider": "openai",
+    "voiceId": "alloy"
+  },
+  "firstMessage": "Hi! This is JOOLA customer support. I'm here to help with returns, warranty claims, or any questions about your products. How can I help you today?",
+  "endCallMessage": "Thanks for calling JOOLA. Have a great day, and don't hesitate to reach out again if you need anything.",
+  "endCallPhrases": ["goodbye", "bye", "talk to you later", "that's all"],
+  "recordingEnabled": true,
+  "silenceTimeoutSeconds": 30,
+  "maxDurationSeconds": 600,
+  "serverUrl": "__WEBHOOK_URL__",
+  "serverUrlSecret": "__WEBHOOK_SECRET__",
+  "serverMessages": ["transcript", "function-call", "end-of-call-report", "status-update"],
+  "clientMessages": ["transcript", "speech-update", "metadata"]
+}

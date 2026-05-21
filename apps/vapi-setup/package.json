@@ -1,0 +1,23 @@
+{
+  "name": "@joola/vapi-setup",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Safety-gated scripts for provisioning and updating the JOOLA Vapi assistant. Targets only the VAPI_ASSISTANT_ID in env; refuses to touch any assistant whose name does not contain 'joola'.",
+  "scripts": {
+    "vapi:inspect": "tsx src/inspect.ts",
+    "vapi:recreate": "tsx src/recreate.ts",
+    "vapi:recreate:apply": "tsx src/recreate.ts --apply",
+    "vapi:update-webhook": "tsx src/update-webhook.ts",
+    "vapi:update-webhook:apply": "tsx src/update-webhook.ts --apply",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "tsx": "^4.7.0",
+    "typescript": "^5.4.0",
+    "@types/node": "^20.0.0"
+  }
+}

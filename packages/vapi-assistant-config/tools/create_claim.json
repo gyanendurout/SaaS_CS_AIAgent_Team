@@ -1,0 +1,72 @@
+{
+  "type": "function",
+  "function": {
+    "name": "create_claim",
+    "description": "Create a new warranty/return claim record in the JOOLA CS system. Returns the human-readable claim_id (format WC-XXXXX) and the initial status_detail. Call this after evaluate_eligibility has returned PROCESSING or ELIGIBLE_FOR_DAMAGE_REVIEW, OR when the customer explicitly asks to open a case even on a NOT_ELIGIBLE decision (so a human can review). Always read the WC-XXXXX number back to the customer at the end.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "customer_id": {
+          "type": "string",
+          "description": "Internal customer UUID, if known from lookup_order."
+        },
+        "customer_email": {
+          "type": "string",
+          "description": "Customer email — required if customer_id is not known.",
+          "format": "email"
+        },
+        "customer_name": {
+          "type": "string",
+          "description": "Customer's full name."
+        },
+        "order_id": {
+          "type": "string",
+          "description": "Internal order UUID, if found via lookup_order."
+        },
+        "order_number": {
+          "type": "string",
+          "description": "Human-readable order number."
+        },
+        "channel": {
+          "type": "string",
+          "description": "Always 'voice' for Vapi-originated claims.",
+          "enum": ["voice"]
+        },
+        "issue": {
+          "type": "string",
+          "description": "Full description of the issue in plain language, suitable for a CS Lead to read."
+        },
+        "is_defective": {
+          "type": "boolean",
+          "description": "True for warranty / damage cases. False for change-of-mind returns."
+        },
+        "decision": {
+          "type": "string",
+          "description": "The decision returned by evaluate_eligibility (so the claim record is created already classified).",
+          "enum": [
+            "PROCESSING",
+            "ELIGIBLE_FOR_DAMAGE_REVIEW",
+            "NOT_ELIGIBLE",
+            "HUMAN_REVIEW_REQUIRED",
+            "WARRANTY_EXPIRED"
+          ]
+        },
+        "reason_code": {
+          "type": "string",
+          "description": "Reason code returned by evaluate_eligibility (e.g., UNAUTHORIZED_SELLER, NFC_LATE, OK_NFC, OK_STANDARD)."
+        },
+        "citation": {
+          "type": "string",
+          "description": "Policy citation returned by evaluate_eligibility (e.g., '§1.7, §2.3')."
+        },
+        "sentiment": {
+          "type": "number",
+          "description": "Optional sentiment score 0.00 - 1.00 estimated from the conversation tone.",
+          "minimum": 0,
+          "maximum": 1
+        }
+      },
+      "required": ["channel", "issue", "is_defective"]
+    }
+  }
+}

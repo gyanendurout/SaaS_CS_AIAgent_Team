@@ -1,0 +1,104 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "ui": "tui",
+  "globalDependencies": ["**/.env.*local", "tsconfig.base.json"],
+  "globalEnv": [
+    "NODE_ENV",
+    "NEXT_PUBLIC_SUPABASE_URL",
+    "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+    "NEXT_PUBLIC_API_URL",
+    "NEXT_PUBLIC_VAPI_PUBLIC_KEY",
+    "NEXT_PUBLIC_VAPI_ASSISTANT_ID",
+    "NEXT_PUBLIC_APP_URL",
+    "OPENAI_API_KEY",
+    "OPENAI_MODEL",
+    "VAPI_API_KEY",
+    "VAPI_PRIVATE_KEY",
+    "VAPI_WEBHOOK_SECRET",
+    "VAPI_ASSISTANT_ID",
+    "SUPABASE_URL",
+    "SUPABASE_SERVICE_ROLE_KEY",
+    "SUPABASE_ANON_KEY",
+    "SUPABASE_JWT_SECRET",
+    "DATABASE_URL",
+    "DIRECT_URL",
+    "DEMO_MODE",
+    "POLICY_VERSION",
+    "PUBLIC_BACKEND_URL",
+    "NGROK_AUTHTOKEN",
+    "PORT",
+    "LOG_LEVEL"
+  ],
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": [
+        ".next/**",
+        "!.next/cache/**",
+        "dist/**",
+        "build/**"
+      ],
+      "inputs": [
+        "src/**",
+        "app/**",
+        "pages/**",
+        "components/**",
+        "lib/**",
+        "public/**",
+        "package.json",
+        "tsconfig.json",
+        "next.config.*",
+        "tailwind.config.*",
+        "postcss.config.*"
+      ]
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "lint": {
+      "outputs": [],
+      "inputs": [
+        "src/**",
+        "app/**",
+        "pages/**",
+        "components/**",
+        "lib/**",
+        ".eslintrc.*",
+        "eslint.config.*"
+      ]
+    },
+    "typecheck": {
+      "dependsOn": ["^build"],
+      "outputs": [],
+      "inputs": [
+        "src/**",
+        "app/**",
+        "pages/**",
+        "components/**",
+        "lib/**",
+        "tsconfig.json"
+      ]
+    },
+    "test": {
+      "dependsOn": ["^build"],
+      "outputs": ["coverage/**"],
+      "inputs": [
+        "src/**",
+        "app/**",
+        "tests/**",
+        "__tests__/**",
+        "**/*.test.*",
+        "**/*.spec.*",
+        "vitest.config.*",
+        "jest.config.*"
+      ]
+    },
+    "clean": {
+      "cache": false
+    },
+    "format": {
+      "cache": false
+    }
+  }
+}

@@ -1,0 +1,110 @@
+{
+  "type": "function",
+  "function": {
+    "name": "evaluate_eligibility",
+    "description": "Submit all gathered claim facts to the deterministic JOOLA policy rule engine and receive a decision. Returns one of: PROCESSING, ELIGIBLE_FOR_DAMAGE_REVIEW, NOT_ELIGIBLE, HUMAN_REVIEW_REQUIRED, or WARRANTY_EXPIRED, along with a reason_code and a citation pointing to the relevant policy section. Call this once you have collected the order info, the product type, the issue, whether the item is defective, and (for NFC paddles) the registration status. Do not communicate a decision to the customer without calling this first.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "order_id": {
+          "type": "string",
+          "description": "Internal order UUID from lookup_order."
+        },
+        "order_number": {
+          "type": "string",
+          "description": "Human-readable order number, as fallback."
+        },
+        "customer_email": {
+          "type": "string",
+          "description": "Customer email if order is not known.",
+          "format": "email"
+        },
+        "product_type": {
+          "type": "string",
+          "description": "Canonical product type from the policy enum.",
+          "enum": [
+            "PADDLE_STANDARD",
+            "PADDLE_NFC",
+            "PICKLEBALL_NETS",
+            "PICKLEBALL_BALLS",
+            "COVERS_CASES",
+            "BAGS",
+            "EYEWEAR",
+            "PADDLE_SETS",
+            "TT_INDOOR_TABLE",
+            "TT_OUTDOOR_TABLE",
+            "TT_CUSTOMIZED_RACKET",
+            "TT_RACKET_SET",
+            "TT_RECREATIONAL_RACKET",
+            "IPONG_ROBOT",
+            "TT_BLADES",
+            "TT_RUBBERS",
+            "TT_BALLS",
+            "TT_TABLE_COVERS",
+            "TT_NETS",
+            "TT_BAGS",
+            "APPAREL",
+            "GRIPS",
+            "GLUES",
+            "CLEANERS",
+            "EDGE_TAPES",
+            "OTHER"
+          ]
+        },
+        "order_source": {
+          "type": "string",
+          "description": "Where the customer says they bought it.",
+          "enum": [
+            "JOOLA_DIRECT",
+            "AUTHORIZED_RETAILER",
+            "EBAY",
+            "FACEBOOK_MARKETPLACE",
+            "AUCTION_SITE",
+            "UNKNOWN_ONLINE",
+            "OTHER"
+          ]
+        },
+        "purchase_date": {
+          "type": "string",
+          "description": "Date of purchase in ISO-8601 (YYYY-MM-DD).",
+          "format": "date"
+        },
+        "issue": {
+          "type": "string",
+          "description": "Plain-language description of the issue, in the customer's own words if possible."
+        },
+        "is_defective": {
+          "type": "boolean",
+          "description": "True if the customer claims a manufacturing defect or damage on arrival. False for change-of-mind / wrong-size returns."
+        },
+        "is_original_purchaser": {
+          "type": "boolean",
+          "description": "True if the caller is the person who bought the item. Gifts/recipients = false."
+        },
+        "country": {
+          "type": "string",
+          "description": "ISO-2 country code where the customer is located (US, CA, PR). Other = warranty not valid.",
+          "enum": ["US", "CA", "PR", "OTHER"]
+        },
+        "nfc_registered": {
+          "type": "boolean",
+          "description": "For NFC paddles: was it registered within the 14-day window and receipt approved? Pass the result of check_warranty_registration."
+        },
+        "replacements_used": {
+          "type": "integer",
+          "description": "Number of prior warranty replacements already issued for this paddle (if any).",
+          "minimum": 0
+        },
+        "signed_for_damaged_freight": {
+          "type": "boolean",
+          "description": "True if this is a freight table and the customer signed for visibly damaged delivery."
+        },
+        "reported_within_7_days": {
+          "type": "boolean",
+          "description": "For final-sale defective/damaged items: was the issue reported within 7 days of receipt?"
+        }
+      },
+      "required": ["product_type", "issue", "is_defective", "is_original_purchaser"]
+    }
+  }
+}

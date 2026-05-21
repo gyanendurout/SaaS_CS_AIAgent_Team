@@ -1,0 +1,38 @@
+{
+  "type": "function",
+  "function": {
+    "name": "escalate_to_human",
+    "description": "Push a claim to the CS Lead escalation queue. Call this for cases matching the escalation criteria in §5.2 of the policy: replacement limit reached on a compelling case, brand-risk customer behavior, safety concerns, ambiguous damage that needs human judgment, signed-for damaged freight tables, or complex multi-item situations. The escalation appears in the CS Lead's right-panel queue. Always tell the customer their case number after escalating.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "claim_id": {
+          "type": "string",
+          "description": "The WC-XXXXX id returned by create_claim. Required."
+        },
+        "reason": {
+          "type": "string",
+          "description": "Why the case is being escalated. Maps to the escalation_reason enum in the database.",
+          "enum": [
+            "REPLACEMENT_LIMIT_REACHED",
+            "OUTSIDE_REGION",
+            "DISPUTED_SELLER",
+            "AMBIGUOUS_DAMAGE",
+            "BRAND_RISK",
+            "SAFETY"
+          ]
+        },
+        "priority": {
+          "type": "string",
+          "description": "Queue priority. Use 'urgent' for safety or active hostility; 'high' for distressed customers or signed-freight tables; 'norm' for everything else.",
+          "enum": ["urgent", "high", "norm"]
+        },
+        "summary": {
+          "type": "string",
+          "description": "One-paragraph human-readable summary for the CS Lead — what happened, what the customer wants, why you escalated. Do not include PII beyond what is needed."
+        }
+      },
+      "required": ["claim_id", "reason", "priority", "summary"]
+    }
+  }
+}

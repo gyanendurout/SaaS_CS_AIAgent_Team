@@ -1,0 +1,25 @@
+{
+  "type": "function",
+  "function": {
+    "name": "check_warranty_registration",
+    "description": "Check the NFC paddle warranty registration status for a given order. Returns whether the paddle was registered, the registration date, whether registration happened inside the 14-day window from purchase, and whether the receipt was approved. Call this only after lookup_order has succeeded and the product is an NFC-capable paddle, OR when the customer explicitly claims they registered their paddle. Provide order_id (preferred) or nfc_id.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "order_id": {
+          "type": "string",
+          "description": "The internal order UUID returned by lookup_order. Preferred."
+        },
+        "order_number": {
+          "type": "string",
+          "description": "Order number as fallback if order_id is not available."
+        },
+        "nfc_id": {
+          "type": "string",
+          "description": "The NFC chip ID printed on the paddle. Use when the customer gives it directly and no order is known."
+        }
+      },
+      "required": []
+    }
+  }
+}
