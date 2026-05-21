@@ -8,7 +8,6 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import fp from 'fastify-plugin';
-import ws from 'ws';
 
 import { env } from '../env.js';
 
@@ -33,7 +32,6 @@ const supabasePlugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     global: {
       headers: { 'x-application-name': 'joola-api' },
     },
-        realtime: { transport: ws },
   });
 
   app.decorate('supabase', client);
