@@ -22,7 +22,9 @@ export function VoiceCallButton({ status, onStart, onEnd, disabled }: Props) {
     status === 'speaking' ||
     status === 'processing';
 
-  const label = isActive ? 'End call' : status === 'connecting' ? 'Connecting…' : 'Start call';
+  const label = isActive
+    ? status === 'connecting' ? 'Connecting…' : 'End call'
+    : 'Start call';
 
   return (
     <button
