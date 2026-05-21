@@ -7,12 +7,12 @@
  * Side effects:
  *   - drafts.status = 'approved' (or 'edited'); approved_by + approved_at set
  *   - claims.stage = 'closed', status_detail = 'CLOSED_RESOLVED',
- *     closed_at = now(), primary_agent_id = 'response'
+ *     closed_at = now(), primary_agent_id = 'response'h
  *   - If the claim's channel is 'email', insert an outbound email row from
  *     the (possibly edited) draft so the customer sees the reply.
  *   - Audit event CS_DRAFT_APPROVED.
  *
- * Body: { draft_id?, edited_voice?, edited_email_subject?, edited_email_body? }
+ * Body: { draft_id?, edited_voice?, edited_email_subject?, edited_email_bodyh? }
  *   draft_id is optional — defaults to the most recent pending_approval draft.
  */
 
@@ -64,7 +64,7 @@ const route: FastifyPluginAsync = async (app) => {
       return reply.code(404).send({ error: 'claim_not_found', claim_id: claimId });
     }
     const claimRow = claim as Pick<ClaimRow, 'id' | 'channel' | 'customer_id'> & {
-      customers: { email: string; name: string } | null;
+      customers: { email: string; name: string }[] | null;
     };
 
     // 2. Pick the draft.
@@ -144,7 +144,7 @@ const route: FastifyPluginAsync = async (app) => {
     //    already computed above — just pass them to whichever SDK you choose.
     // ────────────────────────────────────────────────────────────────────────
     if (claimRow.channel === 'email' && finalBody && finalSubject) {
-      const toAddr = claimRow.customers?.email;
+      const toAddr = claimRow.customers?.[0]?.email;
       if (toAddr) {
         const { error: emailErr } = await app.supabase.from('emails').insert({
           claim_id: claimId,
