@@ -59,7 +59,7 @@ const route: FastifyPluginAsync = async (app) => {
       return reply.code(404).send({ error: 'claim_not_found', claim_id: claimId });
     }
     const claimRow = claim as Pick<ClaimRow, 'id' | 'channel' | 'customer_id'> & {
-      customers: { email: string; name: string }[] | null;
+      customers: { email: string; name: string } | null;
     };
 
     // 2. Pick the draft.
@@ -121,7 +121,7 @@ const route: FastifyPluginAsync = async (app) => {
 
     // 6. Send the outbound email (same adapter point as approve-draft step 6).
     if (claimRow.channel === 'email' && finalBody && finalSubject) {
-      const toAddr = claimRow.customers?.[0]?.email;
+      const toAddr = claimRow.customers?.email;
       if (toAddr) {
         const { error: emailErr } = await app.supabase.from('emails').insert({
           claim_id: claimId,
