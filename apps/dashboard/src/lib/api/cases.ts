@@ -39,13 +39,13 @@ export interface CaseDetail {
 export async function fetchCase(claimId: string): Promise<CaseDetail | null> {
   const supabase = getBrowserSupabase();
 
-  const { data: claim, error: claimErr } = await supabase
+  const { data: claimRaw, error: claimErr } = await supabase
     .from('claims')
     .select('*')
     .eq('id', claimId)
     .maybeSingle();
   if (claimErr) throw new Error(`claims.fetch failed: ${claimErr.message}`);
-  if (!claim) return null;
+  if (!claimRaw) return null;  const claim = claimRaw as Claim;
 
   const [{ data: customer }, ordRes, draftRes, transRes, emailsRes] = await Promise.all([
     supabase.from('customers').select('*').eq('id', claim.customer_id).maybeSingle(),
