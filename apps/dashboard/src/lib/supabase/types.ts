@@ -185,7 +185,7 @@ export interface Draft {
   email_subject: string | null;
   email_body: string | null;
   internal_summary: string | null;
-  status: 'pending_approval' | 'approved' | 'edited' | 'rejected';
+  status: 'pending_approval' | 'approved' | 'edited' | 'rejected' | 'sent';
   approved_by: string | null;
   approved_at: string | null;
   created_at: string;
