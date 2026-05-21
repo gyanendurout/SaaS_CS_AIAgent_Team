@@ -1,6 +1,6 @@
 # Build context: repo root
 # Railway service settings: Root Directory = / (repo root), Dockerfile path = apps/api/Dockerfile
-FROM node:20-alpine
+FROM node:22-alpine
 
 RUN corepack enable && corepack prepare pnpm@9.0.0 --activate
 
