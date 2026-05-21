@@ -177,22 +177,34 @@ async function handleEndOfCall(
       summary: msg.summary ?? null,
     });
 
-    // If the call ended without the pipeline running (claim still at intake
-    // stage — e.g. the AI resolved the query verbally without calling
-    // create_claim), close the placeholder so it leaves the live-calls view.
+    // The dashboard "Active conversations" panel shows voice claims at any of
+    // these stages — when the call ends, the claim must leave that view.
+    // Three sub-cases:
+    //   intake: AI never called create_claim → close as CLOSED_NO_RESPONSE.
+    //   verify/rules: AI called create_claim and a decision was recorded →
+    //     close the claim but preserve the status_detail set by the tool.
     const { data: claimState } = await app.supabase
       .from('claims')
-      .select('stage')
+      .select('stage, status_detail')
       .eq('id', claimId)
       .maybeSingle();
 
-    if (claimState?.stage === 'intake') {
+    const liveStage =
+      claimState?.stage === 'intake' ||
+      claimState?.stage === 'verify' ||
+      claimState?.stage === 'rules';
+
+    if (liveStage) {
       const closedAt = new Date().toISOString();
-      await app.supabase
-        .from('claims')
-        .update({ stage: 'closed', status_detail: 'CLOSED_NO_RESPONSE', closed_at: closedAt })
-        .eq('id', claimId);
-      log.info({ claimId }, '[vapi:end-of-call] closed unprocessed intake claim');
+      const patch: Record<string, unknown> = { stage: 'closed', closed_at: closedAt };
+      if (claimState!.stage === 'intake') {
+        patch.status_detail = 'CLOSED_NO_RESPONSE';
+      }
+      await app.supabase.from('claims').update(patch).eq('id', claimId);
+      log.info(
+        { claimId, prevStage: claimState!.stage },
+        '[vapi:end-of-call] closed live claim',
+      );
     }
     return;
   }
