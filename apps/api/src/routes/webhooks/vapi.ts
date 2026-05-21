@@ -176,6 +176,24 @@ async function handleEndOfCall(
       recording_url: msg.recordingUrl ?? null,
       summary: msg.summary ?? null,
     });
+
+    // If the call ended without the pipeline running (claim still at intake
+    // stage — e.g. the AI resolved the query verbally without calling
+    // create_claim), close the placeholder so it leaves the live-calls view.
+    const { data: claimState } = await app.supabase
+      .from('claims')
+      .select('stage')
+      .eq('id', claimId)
+      .maybeSingle();
+
+    if (claimState?.stage === 'intake') {
+      const closedAt = new Date().toISOString();
+      await app.supabase
+        .from('claims')
+        .update({ stage: 'closed', status_detail: 'CLOSED_NO_RESPONSE', closed_at: closedAt })
+        .eq('id', claimId);
+      log.info({ claimId }, '[vapi:end-of-call] closed unprocessed intake claim');
+    }
     return;
   }
 

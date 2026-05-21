@@ -30,6 +30,7 @@ export function ActiveCalls() {
       .select('*')
       .eq('channel', 'voice')
       .eq('display_status', 'OPEN')
+      .in('stage', ['intake', 'verify', 'rules'])
       .order('created_at', { ascending: false })
       .limit(4);
     if (!claims || claims.length === 0) {

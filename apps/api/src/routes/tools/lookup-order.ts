@@ -13,6 +13,29 @@ import type { FastifyPluginAsync } from 'fastify';
 import { LookupOrderInput } from '../../types/tools.js';
 import type { OrderRow, CustomerRow, RegistrationRow } from '../../types/domain.js';
 
+// Maps spoken digit words (from voice transcripts) to their numeric characters.
+const DIGIT_WORDS: Record<string, string> = {
+  zero: '0', one: '1', two: '2', three: '3', four: '4',
+  five: '5', six: '6', seven: '7', eight: '8', nine: '9',
+  oh: '0',
+};
+
+/**
+ * Convert a possibly-spoken order number to a digit-only string for fuzzy
+ * ILIKE matching. Handles:
+ *   "j d one zero zero zero one four"  → "100014"
+ *   "JD-100014"                         → "100014"
+ *   "one hundred thousand fourteen"    → partial (best-effort)
+ */
+function spokenToDigits(raw: string): string {
+  return raw
+    .toLowerCase()
+    .split(/[\s\-_.]+/)
+    .map(w => DIGIT_WORDS[w] ?? w)
+    .join('')
+    .replace(/\D/g, '');
+}
+
 const route: FastifyPluginAsync = async (app) => {
   app.post('/api/tools/lookup_order', async (req, reply) => {
     const parsed = LookupOrderInput.safeParse(req.body);
@@ -30,12 +53,11 @@ const route: FastifyPluginAsync = async (app) => {
     let registration: RegistrationRow | null = null;
 
     if (input.order_number) {
-      // Search by order number — strip any leading "JL-" prefix the caller spoke.
-      const normalised = input.order_number.replace(/^JL[-_ ]?/i, '');
+      // Case-insensitive exact match first (covers "JD-100014", "jd-100014", etc.)
       const { data, error } = await app.supabase
         .from('orders')
         .select('*, customers(*)')
-        .or(`order_number.eq.${normalised},order_number.eq.${input.order_number}`)
+        .ilike('order_number', input.order_number)
         .limit(1)
         .maybeSingle();
       if (error) {
@@ -49,10 +71,10 @@ const route: FastifyPluginAsync = async (app) => {
         order = rest as OrderRow;
         customer = cust ?? null;
       } else {
-        // Fallback: substring/ILIKE match. Lets demo callers say "100001" and
-        // hit "JD-100001", or even just the trailing digits. Only kicks in
-        // when exact match returns nothing.
-        const digits = input.order_number.replace(/\D/g, '');
+        // Fallback: digit-extraction ILIKE match.
+        // Handles spoken forms like "j d one zero zero zero one four" → digits 100014
+        // which matches "JD-100014", and also numeric-only input like "100001".
+        const digits = spokenToDigits(input.order_number);
         const pattern = digits.length >= 3 ? `%${digits}%` : `%${input.order_number}%`;
         const { data: fuzzy, error: fuzzyErr } = await app.supabase
           .from('orders')

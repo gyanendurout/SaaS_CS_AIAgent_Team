@@ -151,6 +151,59 @@ export function CaseDrawer() {
                 </div>
               )}
 
+              {c.channel === 'voice' && detail.transcripts && detail.transcripts.length > 0 && (
+                <div className="section">
+                  <div className="section__h">
+                    <span className="eyebrow">Call transcript</span>
+                    <span
+                      className="mono"
+                      style={{ fontSize: 10, color: 'var(--ops-fg-3)' }}
+                    >
+                      {detail.transcripts.length} LINE{detail.transcripts.length === 1 ? '' : 'S'}
+                    </span>
+                  </div>
+                  <div
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 3,
+                      maxHeight: 280,
+                      overflowY: 'auto',
+                      padding: '6px 0',
+                    }}
+                  >
+                    {detail.transcripts.map((line) => (
+                      <div
+                        key={line.id}
+                        style={{
+                          display: 'flex',
+                          gap: 8,
+                          fontSize: 12,
+                          lineHeight: 1.45,
+                          padding: '2px 0',
+                        }}
+                      >
+                        <span
+                          className="mono"
+                          style={{
+                            minWidth: 38,
+                            fontSize: 10,
+                            color: line.who === 'CUSTOMER'
+                              ? 'var(--ops-yellow)'
+                              : 'var(--ops-fg-3)',
+                            flexShrink: 0,
+                            paddingTop: 1,
+                          }}
+                        >
+                          {line.who === 'CUSTOMER' ? 'CUST' : 'AI ▸'}
+                        </span>
+                        <span style={{ color: 'var(--ops-fg)', flex: 1 }}>{line.txt}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div className="section">
                 <div className="section__h">
                   <span className="eyebrow">Issue reported</span>
