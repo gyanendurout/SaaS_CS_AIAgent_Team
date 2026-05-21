@@ -14,7 +14,7 @@ COPY apps/customer-demo/package.json apps/customer-demo/package.json
 COPY packages/vapi-assistant-config/package.json packages/vapi-assistant-config/package.json
 
 # Install only api and its transitive deps (pnpm resolves the workspace graph)
-RUN pnpm install --no-frozen-lockfile --filter @joola/api
+RUN pnpm install --frozen-lockfile --filter @joola/api
 
 COPY apps/api apps/api
 

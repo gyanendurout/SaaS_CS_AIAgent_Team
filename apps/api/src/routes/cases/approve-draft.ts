@@ -7,12 +7,12 @@
  * Side effects:
  *   - drafts.status = 'approved' (or 'edited'); approved_by + approved_at set
  *   - claims.stage = 'closed', status_detail = 'CLOSED_RESOLVED',
- *     closed_at = now(), primary_agent_id = 'response'h
+ *     closed_at = now(), primary_agent_id = 'response'
  *   - If the claim's channel is 'email', insert an outbound email row from
  *     the (possibly edited) draft so the customer sees the reply.
  *   - Audit event CS_DRAFT_APPROVED.
  *
- * Body: { draft_id?, edited_voice?, edited_email_subject?, edited_email_bodyh? }
+ * Body: { draft_id?, edited_voice?, edited_email_subject?, edited_email_body? }
  *   draft_id is optional — defaults to the most recent pending_approval draft.
  */
 
