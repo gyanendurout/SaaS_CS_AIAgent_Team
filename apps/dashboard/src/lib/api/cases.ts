@@ -4,7 +4,7 @@ import { getBrowserSupabase } from '@/lib/supabase/client';
 import type {
   CaseEvent,
   Claim,
-  customer: typedCustomer,
+    Customer,
   Draft,
   Order,
   Registration,
