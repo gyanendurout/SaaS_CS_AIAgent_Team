@@ -16,9 +16,7 @@ COPY packages/vapi-assistant-config/package.json packages/vapi-assistant-config/
 # Install only api and its transitive deps (pnpm resolves the workspace graph)
 RUN pnpm install --frozen-lockfile --filter @joola/api
 
-# Copy source and build TypeScript
 COPY apps/api apps/api
-COPY tsconfig.base.json tsconfig.base.json
 
 RUN cd apps/api && pnpm build
 
