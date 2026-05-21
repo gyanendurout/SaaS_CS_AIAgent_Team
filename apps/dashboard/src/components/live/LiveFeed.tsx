@@ -134,8 +134,8 @@ export function LiveFeed() {
               ? supabase.from('orders').select('product_name').eq('id', claim.order_id).maybeSingle()
               : Promise.resolve({ data: null }),
           ]);
-          const customerName = (custRes.data?.name as string | undefined) ?? 'Unknown';
-          const productName = (ordRes.data?.product_name as string | undefined) ?? null;
+          const customerName = ((custRes.data as { name: string } | null)?.name) ?? 'Unknown';
+          const productName = ((ordRes.data as { product_name: string } | null)?.product_name) ?? null;
           setItems((prev) =>
             prev.map((p) =>
               p.claim.id === claim.id ? { ...p, customerName, productName } : p,
