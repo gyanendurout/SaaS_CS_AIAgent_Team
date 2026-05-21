@@ -110,18 +110,18 @@ async function buildServer(): Promise<FastifyInstance> {
       req.log.warn({ err: err.message }, 'ValidationError');
       return reply
         .code(400)
-        .send({ error: err.code, message: err.message, details: err.details });
+        .send({ error: err.code, message: err.message, details: (err as ValidationError).details });
     }
     if (err instanceof RateLimitError) {
-      if (err.retryAfterSeconds) {
-        reply.header('Retry-After', String(err.retryAfterSeconds));
+      if ((err as RateLimitError).retryAfterSeconds) {
+        reply.header('Retry-After', String((err as RateLimitError).retryAfterSeconds));
       }
       return reply.code(429).send({ error: err.code, message: err.message });
     }
     if (err instanceof ExportTooLargeError) {
       return reply
         .code(416)
-        .send({ error: err.code, message: err.message, count: err.count });
+        .send({ error: err.code, message: err.message, count: (err as ExportTooLargeError).count });
     }
     if (err instanceof UpstreamError) {
       req.log.error({ err: err.message }, 'UpstreamError');
