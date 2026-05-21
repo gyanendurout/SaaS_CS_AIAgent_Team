@@ -4,7 +4,7 @@ import { getBrowserSupabase } from '@/lib/supabase/client';
 import type {
   CaseEvent,
   Claim,
-  Customer,
+  customer: typedCustomer,
   Draft,
   Order,
   Registration,
@@ -71,22 +71,22 @@ export async function fetchCase(claimId: string): Promise<CaseDetail | null> {
       .order('sent_at', { ascending: true }),
   ]);
 
-  if (!customer) return null;
+  const typedCustomer = customer as Customer | null;  if (!typedCustomer) return null;
 
   let registration: Registration | null = null;
-  if (ordRes.data) {
+  const order = ordRes.data as Order | null;  if (order) {
     const { data: reg } = await supabase
       .from('registrations')
       .select('*')
-      .eq('order_id', ordRes.data.id)
+      .eq('order_id', order!.id)
       .maybeSingle();
     registration = reg ?? null;
   }
 
   return {
     claim,
-    customer,
-    order: ordRes.data ?? null,
+    customer: typedCustomer,
+    order: order,
     registration,
     drafts: draftRes.data ?? null,
     transcripts: (transRes.data ?? []) as Transcript[],
