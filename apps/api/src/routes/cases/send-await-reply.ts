@@ -1,4 +1,4 @@
-h/**
+/**
  * POST /api/cases/:id/send-await-reply
  *
  * CS Lead sends a "we need more information" reply to the customer but keeps
