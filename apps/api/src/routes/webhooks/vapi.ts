@@ -81,12 +81,13 @@ const route: FastifyPluginAsync = async (app) => {
 
           case 'function-call':
           case 'tool-calls': {
-            const result = await handleFunctionCall(
+            const envelope = await handleFunctionCall(
               app,
               message as VapiFunctionCallMessage,
               log,
+              message.type,
             );
-            return reply.send(result);
+            return reply.send(envelope);
           }
 
           case 'end-of-call-report':
@@ -177,33 +178,48 @@ async function handleEndOfCall(
       summary: msg.summary ?? null,
     });
 
-    // The dashboard "Active conversations" panel shows voice claims at any of
-    // these stages — when the call ends, the claim must leave that view.
-    // Three sub-cases:
+    // Two sub-cases for an in-progress voice claim:
     //   intake: AI never called create_claim → close as CLOSED_NO_RESPONSE.
-    //   verify/rules: AI called create_claim and a decision was recorded →
-    //     close the claim but preserve the status_detail set by the tool.
+    //   verify/rules: AI called create_claim with a decision → run the AI
+    //     pipeline (shopify/warrreg/rules/summary/response) so each agent
+    //     records its case_event and the response agent drafts a follow-up
+    //     email. The pipeline moves the claim to 'draft' or 'closed', which
+    //     also removes it from the dashboard's live-calls filter.
+    //   Other stages: claim already past the live filter — no-op.
     const { data: claimState } = await app.supabase
       .from('claims')
-      .select('stage, status_detail')
+      .select('stage, status_detail, issue')
       .eq('id', claimId)
       .maybeSingle();
 
-    const liveStage =
-      claimState?.stage === 'intake' ||
-      claimState?.stage === 'verify' ||
-      claimState?.stage === 'rules';
-
-    if (liveStage) {
+    if (claimState?.stage === 'intake') {
       const closedAt = new Date().toISOString();
-      const patch: Record<string, unknown> = { stage: 'closed', closed_at: closedAt };
-      if (claimState!.stage === 'intake') {
-        patch.status_detail = 'CLOSED_NO_RESPONSE';
-      }
-      await app.supabase.from('claims').update(patch).eq('id', claimId);
+      await app.supabase
+        .from('claims')
+        .update({ stage: 'closed', status_detail: 'CLOSED_NO_RESPONSE', closed_at: closedAt })
+        .eq('id', claimId);
+      log.info({ claimId }, '[vapi:end-of-call] closed intake-only claim');
+    } else if (claimState?.stage === 'verify' || claimState?.stage === 'rules') {
+      // Fire-and-forget: Vapi has already ended the call, the webhook just
+      // needs a quick ack. Pipeline takes ~5-10s; we don't want to block.
+      void (async () => {
+        try {
+          await app.aiAgents.runPipeline({
+            claim_id: claimId,
+            channel: 'voice',
+            raw_input: { issue: claimState.issue ?? '' },
+          });
+          log.info({ claimId }, '[vapi:end-of-call] pipeline complete for voice claim');
+        } catch (err) {
+          log.error(
+            { err: err instanceof Error ? err.message : String(err), claimId },
+            '[vapi:end-of-call] pipeline failed',
+          );
+        }
+      })();
       log.info(
-        { claimId, prevStage: claimState!.stage },
-        '[vapi:end-of-call] closed live claim',
+        { claimId, prevStage: claimState.stage },
+        '[vapi:end-of-call] pipeline launched (fire-and-forget)',
       );
     }
     return;
@@ -355,37 +371,81 @@ async function handleFunctionCall(
   app: import('fastify').FastifyInstance,
   msg: VapiFunctionCallMessage,
   log: import('fastify').FastifyBaseLogger,
-): Promise<{ result: unknown }> {
-  // Normalise: function-call vs tool-calls payloads
-  const call =
-    msg.functionCall ??
-    msg.toolCallList?.[0]?.function ??
-    undefined;
-
-  if (!call?.name) {
-    log.warn('[vapi:function-call] missing call.name');
-    return { result: { error: 'missing_function_name' } };
+  msgType: 'function-call' | 'tool-calls',
+): Promise<{ result: unknown } | { results: Array<{ toolCallId: string; result: unknown }> }> {
+  // Two incoming shapes:
+  //   legacy `function-call` → msg.functionCall (single)
+  //   modern `tool-calls`    → msg.toolCallList[] (one OR many; the model may
+  //                            dispatch tools in parallel, so we MUST process
+  //                            every entry and return a result for each id).
+  if (msgType === 'tool-calls') {
+    const list = msg.toolCallList ?? [];
+    if (list.length === 0) {
+      log.warn('[vapi:tool-calls] empty toolCallList');
+      return { results: [] };
+    }
+    const results = await Promise.all(
+      list.map(async (tc) => ({
+        toolCallId: tc.id ?? '',
+        result: await invokeOneTool(app, tc.function, log),
+      })),
+    );
+    return { results };
   }
 
-  // `parameters` is the modern shape; `arguments` is a stringified fallback.
+  // legacy function-call
+  if (!msg.functionCall) {
+    log.warn('[vapi:function-call] missing functionCall');
+    return { result: { error: 'missing_function_call' } };
+  }
+  return { result: await invokeOneTool(app, msg.functionCall, log) };
+}
+
+/**
+ * Dispatch ONE Vapi tool invocation to the matching internal route via
+ * `app.inject()` and return the JSON-decoded response body. Handles all three
+ * argument shapes Vapi has shipped over time (parameters-object, arguments-
+ * string, arguments-object).
+ */
+async function invokeOneTool(
+  app: import('fastify').FastifyInstance,
+  call: { name?: string; parameters?: unknown; arguments?: unknown } | undefined,
+  log: import('fastify').FastifyBaseLogger,
+): Promise<unknown> {
+  if (!call?.name) {
+    log.warn('[vapi:tool] missing call.name');
+    return { error: 'missing_function_name' };
+  }
+
   let params: Record<string, unknown> = {};
+  const args = call.arguments;
   if (call.parameters && typeof call.parameters === 'object') {
-    params = call.parameters;
-  } else if (typeof call.arguments === 'string') {
+    params = call.parameters as Record<string, unknown>;
+  } else if (args && typeof args === 'object') {
+    params = args as Record<string, unknown>;
+  } else if (typeof args === 'string') {
     try {
-      params = JSON.parse(call.arguments);
+      params = JSON.parse(args);
     } catch {
-      log.warn('[vapi:function-call] arguments not JSON — passing empty');
+      log.warn({ tool: call.name }, '[vapi:tool] arguments not JSON — passing empty');
     }
   }
 
+  log.info(
+    {
+      tool: call.name,
+      shape: call.parameters ? 'parameters' : typeof args,
+      paramKeys: Object.keys(params),
+    },
+    '[vapi:tool] dispatching',
+  );
+
   const path = TOOL_PATHS[call.name];
   if (!path) {
-    log.warn({ name: call.name }, '[vapi:function-call] unknown tool');
-    return { result: { error: `unknown_tool:${call.name}` } };
+    log.warn({ name: call.name }, '[vapi:tool] unknown tool');
+    return { error: `unknown_tool:${call.name}` };
   }
 
-  // Inject the request — preserves all plugins/decorators on the inner request.
   const resp = await app.inject({
     method: 'POST',
     url: path,
@@ -401,10 +461,9 @@ async function handleFunctionCall(
   }
 
   if (resp.statusCode >= 400) {
-    log.warn({ tool: call.name, status: resp.statusCode }, '[vapi:function-call] tool error');
+    log.warn({ tool: call.name, status: resp.statusCode }, '[vapi:tool] tool error');
   }
-
-  return { result: payload };
+  return payload;
 }
 
 const TOOL_PATHS: Record<string, string> = {
