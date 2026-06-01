@@ -63,7 +63,10 @@ const route: FastifyPluginAsync = async (app) => {
     if (!claim) {
       return reply.code(404).send({ error: 'claim_not_found', claim_id: claimId });
     }
-    const claimRow = claim as Pick<ClaimRow, 'id' | 'channel' | 'customer_id'> & {
+    // Supabase's generated types declare to-one joins as arrays, but the
+    // runtime returns a single object for foreign-key joins. Go through
+    // `unknown` to bridge the deliberate type mismatch.
+    const claimRow = claim as unknown as Pick<ClaimRow, 'id' | 'channel' | 'customer_id'> & {
       customers: { email: string; name: string } | null;
     };
 
