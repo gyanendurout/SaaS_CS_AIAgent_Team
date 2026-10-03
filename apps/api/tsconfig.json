@@ -5,6 +5,7 @@
     "outDir": "dist",
     "noEmit": false,
     "types": ["node"],
+    "lib": ["ES2022", "DOM"],
     "module": "ESNext",
     "moduleResolution": "bundler"
   },
