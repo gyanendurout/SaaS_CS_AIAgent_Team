@@ -7,24 +7,33 @@ for OpenAI's automatic prompt caching.
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
-# docs/policies/cs-knowledge-base-v1.md lives at the repo root.
-# This file is at apps/ai-agents/app/prompts/system.py -> .parents[4] = repo root.
-_REPO_ROOT = Path(__file__).resolve().parents[4]
-_POLICY_DOC = _REPO_ROOT / "docs" / "policies" / "cs-knowledge-base-v1.md"
+log = logging.getLogger(__name__)
+
+_DOC_NAME = "cs-knowledge-base-v1.md"
+# This file is at apps/ai-agents/app/prompts/system.py.
+_APP_ROOT = Path(__file__).resolve().parents[2]
+_POLICY_DOC_CANDIDATES = (
+    # Monorepo checkout (local dev, Docker): docs/policies/ at the repo root.
+    _APP_ROOT.parent.parent / "docs" / "policies" / _DOC_NAME,
+    # Vercel bundle: copied in by scripts/vercel_prepare.py at build time.
+    _APP_ROOT / "_bundled" / _DOC_NAME,
+)
 
 
 def _load_policy_doc() -> str:
     """Read the policy doc; fall back to a short stub if it's missing in tests."""
-    try:
-        return _POLICY_DOC.read_text(encoding="utf-8")
-    except FileNotFoundError:
-        return (
-            "# JOOLA CS Knowledge Base (stub)\n"
-            "Policy doc not found at expected path. Generate brand-voice replies "
-            "using only the rule engine decision and customer context provided."
-        )
+    for path in _POLICY_DOC_CANDIDATES:
+        if path.is_file():
+            return path.read_text(encoding="utf-8")
+    log.warning("policy doc %s not found; using stub system prompt", _DOC_NAME)
+    return (
+        "# JOOLA CS Knowledge Base (stub)\n"
+        "Policy doc not found at expected path. Generate brand-voice replies "
+        "using only the rule engine decision and customer context provided."
+    )
 
 
 _POLICY_BODY = _load_policy_doc()

@@ -60,7 +60,7 @@ async function buildServer(): Promise<FastifyInstance> {
           }
         : {}),
     },
-    // Trust X-Forwarded-* headers when behind Railway/ngrok.
+    // Trust X-Forwarded-* headers when behind Vercel/ngrok.
     trustProxy: true,
     // Reject payloads larger than 1MB by default — Vapi events are tiny.
     bodyLimit: 1_048_576,

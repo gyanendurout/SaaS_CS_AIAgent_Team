@@ -34,6 +34,10 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["app"]
 
+[tool.vercel.scripts]
+# Copies packages/warranty-policy + the policy KB doc into the function bundle.
+build = "python scripts/vercel_prepare.py"
+
 [tool.uv.sources]
 warranty-policy = { path = "../../packages/warranty-policy", editable = true }
 

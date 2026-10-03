@@ -11,6 +11,7 @@
  * and return the tool's result so the model can read it on the next turn.
  */
 
+import { waitUntil } from '@vercel/functions';
 import type { FastifyPluginAsync, FastifyRequest } from 'fastify';
 
 import { env } from '../../env.js';
@@ -202,7 +203,9 @@ async function handleEndOfCall(
     } else if (claimState?.stage === 'verify' || claimState?.stage === 'rules') {
       // Fire-and-forget: Vapi has already ended the call, the webhook just
       // needs a quick ack. Pipeline takes ~5-10s; we don't want to block.
-      void (async () => {
+      // waitUntil keeps the Vercel function alive until the promise settles
+      // (no-op outside Vercel, where the promise simply runs to completion).
+      waitUntil((async () => {
         try {
           await app.aiAgents.runPipeline({
             claim_id: claimId,
@@ -216,7 +219,7 @@ async function handleEndOfCall(
             '[vapi:end-of-call] pipeline failed',
           );
         }
-      })();
+      })());
       log.info(
         { claimId, prevStage: claimState.stage },
         '[vapi:end-of-call] pipeline launched (fire-and-forget)',

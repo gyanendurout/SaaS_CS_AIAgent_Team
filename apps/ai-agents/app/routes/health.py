@@ -1,4 +1,4 @@
-"""GET /health — liveness probe for Railway + monitoring."""
+"""GET /health — liveness probe for Vercel + monitoring."""
 
 from __future__ import annotations
 

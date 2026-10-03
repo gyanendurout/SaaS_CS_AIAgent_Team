@@ -1,6 +1,6 @@
 """Centralised settings (pydantic-settings).
 
-Loads from the repo-root `.env.local` in dev. In production (Railway), the
+Loads from the repo-root `.env.local` in dev. In production (Vercel), the
 platform injects environment variables directly and the `.env.local` file is
 absent — that's fine, `pydantic-settings` will fall back to the process env.
 """
@@ -14,7 +14,8 @@ from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Repo-root .env.local — three parents up from this file (app/config.py).
-_REPO_ROOT_ENV = Path(__file__).resolve().parents[3] / ".env.local"
+# `.parent` chaining (not `.parents[3]`) so shallow deploy paths never raise.
+_REPO_ROOT_ENV = Path(__file__).resolve().parent.parent.parent.parent / ".env.local"
 
 
 class Settings(BaseSettings):
