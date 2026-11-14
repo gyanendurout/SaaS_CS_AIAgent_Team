@@ -10,6 +10,8 @@
     "vapi:recreate:apply": "tsx src/recreate.ts --apply",
     "vapi:update-webhook": "tsx src/update-webhook.ts",
     "vapi:update-webhook:apply": "tsx src/update-webhook.ts --apply",
+    "vapi:add-tool": "tsx src/add-tool.ts",
+    "vapi:add-tool:apply": "tsx src/add-tool.ts --apply",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

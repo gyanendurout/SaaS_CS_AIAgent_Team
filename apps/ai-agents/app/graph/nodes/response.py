@@ -14,6 +14,7 @@ from typing import Any
 
 from app.config import get_settings
 from app.graph.state import PipelineState
+from app.memory.service import search_knowledge
 from app.prompts import SYSTEM_PROMPT, render_user_message
 from app.services.agent_state import update_agent_state
 from app.services.audit import write_case_event
@@ -51,16 +52,21 @@ async def run(state: PipelineState) -> PipelineState:
 
     try:
         decision = state["rule_engine_decision"]
+        settings = get_settings()
+        issue = (state.get("normalized") or {}).get("issue", "")
+        knowledge = (
+            await search_knowledge(issue) if settings.knowledge_source == "vector" else None
+        )
         user_msg = render_user_message(
             decision=decision,
             customer=state.get("customer") or {},
             order=state.get("order"),
             registration=state.get("registration"),
             channel=state.get("channel", "email"),
-            issue=(state.get("normalized") or {}).get("issue", ""),
+            issue=issue,
+            knowledge=knowledge,
         )
 
-        settings = get_settings()
         client = get_openai()
 
         def _call_openai() -> str:

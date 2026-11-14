@@ -1,0 +1,17 @@
+{
+  "type": "function",
+  "function": {
+    "name": "search_products",
+    "description": "Look up a specific JOOLA product in the live store: current price, sale price (compare_at_price when on_sale is true), whether it is in stock, stock per variant (size/thickness/color) and the product link. Use when the customer names or describes a product and asks about price, availability, stock, or a replacement. Works best with product words only, e.g. 'perseus pro v 16mm', 'kosmos pro v', 'neoprene paddle cover', 'pickleball net'. Not for order status (use lookup_order) and not for browsing all sale items. Returns { enabled, results }. If enabled is false or results is empty, say you can't check live stock right now and offer to have the team follow up by email.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "Product name or description in plain words, e.g. 'perseus pro v 16mm'. Do not include names, emails or order numbers."
+        }
+      },
+      "required": ["query"]
+    }
+  }
+}

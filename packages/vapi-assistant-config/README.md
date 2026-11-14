@@ -28,6 +28,8 @@ Vapi assistant config is a slow-moving artifact tied to the policy version (`1.0
 | `evaluate_eligibility` | All claim facts gathered, need decision | decision + reason_code + citation |
 | `create_claim` | Customer wants a claim filed | claim_id (`WC-XXXXX`) + status_detail |
 | `escalate_to_human` | Case fits escalation criteria (§5.2) | escalation row created in queue |
+| `search_knowledge` | General product/shipping/registration question not in built-in knowledge | shared-memory snippets (`enabled:false` when memory is off) |
+| `search_products` | Price / sale / stock of a named product, replacement availability | live Shopify products with variant stock (`enabled:false` when catalogue is off) |
 
 ## How the setup scripts consume this package
 

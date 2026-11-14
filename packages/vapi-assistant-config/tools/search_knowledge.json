@@ -1,0 +1,17 @@
+{
+  "type": "function",
+  "function": {
+    "name": "search_knowledge",
+    "description": "Search JOOLA's shared customer-service knowledge (product fit and sizing, eyewear lenses, paddle care, shipping destinations, returns links, paddle registration). Call this for general questions your built-in knowledge does not cover. Not for customer-specific data — use lookup_order for that. Returns { enabled, results: [{ heading, content }] }. If enabled is false or results is empty, answer from your built-in knowledge or offer a follow-up email. Never contradict the warranty policy.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "The customer's question in plain words, e.g. 'do you ship to Vietnam' or 'which lens is best for indoor play'. Do not include names, emails or order numbers."
+        }
+      },
+      "required": ["query"]
+    }
+  }
+}

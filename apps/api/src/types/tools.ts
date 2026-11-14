@@ -144,3 +144,17 @@ export const EscalateToHumanInput = z.object({
   summary: z.string().min(1),
 });
 export type EscalateToHumanInput = z.infer<typeof EscalateToHumanInput>;
+
+// --- search_knowledge -----------------------------------------------------
+
+export const SearchKnowledgeInput = z.object({
+  query: z.string().trim().min(1).max(500),
+});
+export type SearchKnowledgeInput = z.infer<typeof SearchKnowledgeInput>;
+
+// --- search_products ------------------------------------------------------
+
+export const SearchProductsInput = z.object({
+  query: z.string().trim().min(1).max(200),
+});
+export type SearchProductsInput = z.infer<typeof SearchProductsInput>;

@@ -1,6 +1,6 @@
 """Direct tool endpoints — called by the Fastify API which forwards Vapi tool requests.
 
-Five tools:
+Seven tools:
 
 | Path                                | Purpose                                                |
 | ----------------------------------- | ------------------------------------------------------ |
@@ -9,6 +9,8 @@ Five tools:
 | /tools/evaluate_eligibility         | pure delegation to warranty_policy.evaluate            |
 | /tools/create_claim                 | insert into claims; optionally kicks off pipeline      |
 | /tools/escalate_to_human            | insert into escalations + bump claim status            |
+| /tools/search_knowledge             | shared kb_chunks memory search (KNOWLEDGE_SOURCE gate) |
+| /tools/search_products              | live Shopify price/sale/stock (CATALOG_SOURCE gate)    |
 """
 
 from __future__ import annotations
@@ -21,8 +23,11 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 from warranty_policy import ClaimInput, DecisionResult, evaluate
 
+from app.catalog.service import catalog_enabled, search_products
+from app.config import get_settings
 from app.graph.build import get_compiled_graph
 from app.graph.state import PipelineState
+from app.memory.service import search_knowledge
 from app.services.audit import write_case_event
 from app.services.supabase_client import get_supabase
 
@@ -313,3 +318,75 @@ async def escalate_to_human(req: EscalateRequest) -> EscalateResponse:
         payload={"reason": req.reason, "priority": req.priority, "via": "tools.escalate"},
     )
     return EscalateResponse(escalation_id=req.claim_id, priority=req.priority)
+
+
+# --------------------------------------------------------------------------- #
+# 6. search_knowledge — shared memory (voice via API, any future channel)      #
+# --------------------------------------------------------------------------- #
+
+
+class SearchKnowledgeRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    query: str = Field(..., min_length=1, max_length=500)
+    k: int = Field(default=3, ge=1, le=8)
+
+
+class KnowledgeHit(BaseModel):
+    source: str
+    heading: str
+    content: str
+    score: float
+
+
+class SearchKnowledgeResponse(BaseModel):
+    enabled: bool
+    results: list[KnowledgeHit]
+
+
+@router.post("/search_knowledge", response_model=SearchKnowledgeResponse)
+async def search_knowledge_route(req: SearchKnowledgeRequest) -> SearchKnowledgeResponse:
+    """``enabled=false`` while KNOWLEDGE_SOURCE=static — callers fall back to built-in knowledge."""
+    enabled = get_settings().knowledge_source == "vector"
+    hits = await search_knowledge(req.query, k=req.k) if enabled else []
+    return SearchKnowledgeResponse(enabled=enabled, results=[KnowledgeHit(**h) for h in hits])
+
+
+# --------------------------------------------------------------------------- #
+# 7. search_products — live Shopify catalogue (price, sale, stock)             #
+# --------------------------------------------------------------------------- #
+
+
+class SearchProductsRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    query: str = Field(..., min_length=1, max_length=200)
+    limit: int = Field(default=5, ge=1, le=10)
+
+
+class ProductVariant(BaseModel):
+    title: str | None
+    available: bool
+    price: float | None
+    compare_at_price: float | None
+
+
+class Product(BaseModel):
+    title: str | None
+    url: str | None
+    price: float | None
+    compare_at_price: float | None
+    on_sale: bool
+    available: bool
+    variants: list[ProductVariant]
+
+
+class SearchProductsResponse(BaseModel):
+    enabled: bool
+    results: list[Product]
+
+
+@router.post("/search_products", response_model=SearchProductsResponse)
+async def search_products_route(req: SearchProductsRequest) -> SearchProductsResponse:
+    """``enabled=false`` while CATALOG_SOURCE=off — callers answer without live stock/price."""
+    enabled = catalog_enabled()
+    found = await search_products(req.query, limit=req.limit) if enabled else []
+    return SearchProductsResponse(enabled=enabled, results=[Product(**p) for p in found])

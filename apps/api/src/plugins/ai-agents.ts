@@ -4,6 +4,8 @@
  * Endpoints we proxy to:
  *   POST {PYTHON_AI_URL}/tools/evaluate_eligibility
  *   POST {PYTHON_AI_URL}/pipeline/run
+ *   POST {PYTHON_AI_URL}/tools/search_knowledge
+ *   POST {PYTHON_AI_URL}/tools/search_products
  *
  * Synchronous (no BullMQ) — acceptable since Python responses are <500ms and
  * Vapi handles its own per-tool timeout. If the Python service is down we
@@ -54,6 +56,42 @@ export interface PipelineRunResult {
   error?: string | null;
 }
 
+export interface KnowledgeHit {
+  source: string;
+  heading: string;
+  content: string;
+  score: number;
+}
+
+export interface SearchKnowledgeResult {
+  /** false while ai-agents runs with KNOWLEDGE_SOURCE=static. */
+  enabled: boolean;
+  results: KnowledgeHit[];
+}
+
+export interface ProductVariant {
+  title: string | null;
+  available: boolean;
+  price: number | null;
+  compare_at_price: number | null;
+}
+
+export interface Product {
+  title: string | null;
+  url: string | null;
+  price: number | null;
+  compare_at_price: number | null;
+  on_sale: boolean;
+  available: boolean;
+  variants: ProductVariant[];
+}
+
+export interface SearchProductsResult {
+  /** false while ai-agents runs with CATALOG_SOURCE=off. */
+  enabled: boolean;
+  results: Product[];
+}
+
 export interface AiAgentsClient {
   /**
    * `claimInput` must be in `warranty_policy.ClaimInput` shape (the route is
@@ -62,6 +100,8 @@ export interface AiAgentsClient {
    */
   evaluateEligibility(claimInput: unknown): Promise<EligibilityResult>;
   runPipeline(input: PipelineRunInput): Promise<PipelineRunResult>;
+  searchKnowledge(query: string): Promise<SearchKnowledgeResult>;
+  searchProducts(query: string): Promise<SearchProductsResult>;
 }
 
 declare module 'fastify' {
@@ -71,14 +111,17 @@ declare module 'fastify' {
 }
 
 const DEFAULT_TIMEOUT_MS = 25_000;
+/** Live voice calls can't wait long — on timeout these tools degrade to enabled:false. */
+const LIVE_TOOL_TIMEOUT_MS = 5_000;
 
 async function postJson<T>(
   url: string,
   body: unknown,
   log: FastifyInstance['log'],
+  timeoutMs: number = DEFAULT_TIMEOUT_MS,
 ): Promise<T> {
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), DEFAULT_TIMEOUT_MS);
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
     const res = await fetch(url, {
       method: 'POST',
@@ -127,6 +170,22 @@ const aiAgentsPlugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     },
     async runPipeline(input) {
       return postJson<PipelineRunResult>(`${base}/pipeline/run`, input, app.log);
+    },
+    async searchKnowledge(query) {
+      return postJson<SearchKnowledgeResult>(
+        `${base}/tools/search_knowledge`,
+        { query },
+        app.log,
+        LIVE_TOOL_TIMEOUT_MS,
+      );
+    },
+    async searchProducts(query) {
+      return postJson<SearchProductsResult>(
+        `${base}/tools/search_products`,
+        { query },
+        app.log,
+        LIVE_TOOL_TIMEOUT_MS,
+      );
     },
   };
 

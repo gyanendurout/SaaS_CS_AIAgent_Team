@@ -19,6 +19,10 @@ os.environ.setdefault("SUPABASE_SECRET_KEY", "sb_secret_test")
 os.environ.setdefault("OPENAI_API_KEY", "sk-test")
 os.environ.setdefault("OPENAI_MODEL", "gpt-4o")
 os.environ.setdefault("POLICY_VERSION", "1.0.0")
+# Pin feature switches so the developer's .env.local (e.g. memory turned on
+# for manual testing) never changes test results. Tests opt in explicitly.
+os.environ["KNOWLEDGE_SOURCE"] = "static"
+os.environ["CATALOG_SOURCE"] = "off"
 
 
 # --------------------------------------------------------------------------- #
@@ -132,8 +136,10 @@ class _FakeChoice:
 class _FakeChat:
     def __init__(self) -> None:
         self.completions = self
+        self.calls: list[dict[str, Any]] = []
 
     def create(self, **_kw: Any) -> Any:
+        self.calls.append(_kw)
         payload = (
             '{"voice_reply":"Got it — we will check and follow up.",'
             '"email_subject":"Re: Your JOOLA claim",'

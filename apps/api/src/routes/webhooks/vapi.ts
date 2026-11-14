@@ -475,4 +475,6 @@ const TOOL_PATHS: Record<string, string> = {
   evaluate_eligibility: '/api/tools/evaluate_eligibility',
   create_claim: '/api/tools/create_claim',
   escalate_to_human: '/api/tools/escalate_to_human',
+  search_knowledge: '/api/tools/search_knowledge',
+  search_products: '/api/tools/search_products',
 };

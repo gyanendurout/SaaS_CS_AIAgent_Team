@@ -149,3 +149,4 @@ pnpm dev
 - [Business requirements](./docs/brd/)
 - [Architecture & design](./docs/design/)
 - [Warranty policy v1.0.0](./docs/policies/)
+- [CS shared memory runbook — local vs cloud](./docs/CS_MEMORY_RUNBOOK.md)

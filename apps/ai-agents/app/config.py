@@ -7,10 +7,12 @@ absent — that's fine, `pydantic-settings` will fall back to the process env.
 
 from __future__ import annotations
 
+import logging
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Repo-root .env.local — three parents up from this file (app/config.py).
@@ -37,6 +39,49 @@ class Settings(BaseSettings):
     openai_model: str = Field(default="gpt-4o", description="OpenAI model id")
 
     policy_version: str = Field(default="1.0.0", description="warranty_policy.__POLICY_VERSION__")
+
+    knowledge_source: Literal["static", "vector"] = Field(
+        default="static",
+        description="static = policy doc in the prompt only (original behaviour); "
+        "vector = also search the shared kb_chunks memory in Supabase",
+    )
+    embedding_model: str = Field(
+        default="text-embedding-3-small",
+        description="OpenAI embedding model; must match the vector(1536) column",
+    )
+
+    catalog_source: Literal["off", "shopify"] = Field(
+        default="off",
+        description="off = no live catalogue (original behaviour); "
+        "shopify = product lookups via the Shopify Storefront API",
+    )
+    shopify_store: str = Field(default="", description="<store>.myshopify.com")
+    shopify_storefront_token: str = Field(default="", description="Storefront API access token")
+    shopify_api_version: str = Field(default="2026-07", description="Storefront API version")
+
+    @field_validator("catalog_source", mode="before")
+    @classmethod
+    def _lenient_catalog_source(cls, value: object) -> str:
+        """A typo in the catalogue flag must not stop the service — fall back to off."""
+        normalized = str(value).strip().lower()
+        if normalized in ("off", "shopify"):
+            return normalized
+        logging.getLogger(__name__).warning(
+            "unknown CATALOG_SOURCE=%r — using 'off' (catalogue off)", value
+        )
+        return "off"
+
+    @field_validator("knowledge_source", mode="before")
+    @classmethod
+    def _lenient_knowledge_source(cls, value: object) -> str:
+        """A typo in the memory flag must not stop the service — fall back to static."""
+        normalized = str(value).strip().lower()
+        if normalized in ("static", "vector"):
+            return normalized
+        logging.getLogger(__name__).warning(
+            "unknown KNOWLEDGE_SOURCE=%r — using 'static' (memory off)", value
+        )
+        return "static"
 
     port: int = Field(default=8000, description="HTTP listen port")
     log_level: str = Field(default="INFO", description="DEBUG/INFO/WARNING/ERROR")

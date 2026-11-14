@@ -16,6 +16,7 @@ def render_user_message(
     registration: dict[str, Any] | None,
     channel: str,
     issue: str,
+    knowledge: list[dict[str, Any]] | None = None,
 ) -> str:
     """Build a structured user message for the GPT-4o call.
 
@@ -45,8 +46,21 @@ def render_user_message(
         },
     }
 
+    knowledge_note = ""
+    if knowledge:
+        context["relevant_knowledge"] = [
+            {"source": k.get("source"), "heading": k.get("heading"), "content": k.get("content")}
+            for k in knowledge
+        ]
+        knowledge_note = (
+            "relevant_knowledge is supporting product/shipping info from the shared memory; "
+            "use it only if it helps answer the customer. If it conflicts with the policy "
+            "knowledge base or the rule engine decision, the policy wins.\n"
+        )
+
     return (
-        "Draft the customer reply for the case below. "
+        knowledge_note
+        + "Draft the customer reply for the case below. "
         "Match channel-appropriate tone (voice = spoken, conversational; "
         "email = slightly more formal but still warm). "
         "Return ONLY the JSON object specified in the system prompt.\n\n"

@@ -41,6 +41,8 @@ import createClaimRoute from './routes/tools/create-claim.js';
 import escalateToHumanRoute from './routes/tools/escalate-to-human.js';
 import evaluateRoute from './routes/tools/evaluate-eligibility.js';
 import lookupOrderRoute from './routes/tools/lookup-order.js';
+import searchKnowledgeRoute from './routes/tools/search-knowledge.js';
+import searchProductsRoute from './routes/tools/search-products.js';
 import vapiWebhookRoute from './routes/webhooks/vapi.js';
 
 async function buildServer(): Promise<FastifyInstance> {
@@ -85,6 +87,8 @@ async function buildServer(): Promise<FastifyInstance> {
   await app.register(evaluateRoute);
   await app.register(createClaimRoute);
   await app.register(escalateToHumanRoute);
+  await app.register(searchKnowledgeRoute);
+  await app.register(searchProductsRoute);
 
   // Customer demo
   await app.register(voiceStartRoute);

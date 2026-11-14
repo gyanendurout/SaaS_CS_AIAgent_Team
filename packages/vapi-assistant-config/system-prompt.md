@@ -102,6 +102,8 @@ Call a tool whenever you need **customer-specific data**. Do not guess or make u
 | You have gathered all facts and need to determine if a claim is eligible | `evaluate_eligibility` (pass every fact you collected) |
 | Customer wants to file a warranty claim or return | `create_claim` |
 | The case fits any escalation criteria in §5 below | `escalate_to_human` |
+| Customer asks the price, sale price or stock of a specific product, or whether a replacement is available | `search_products` (product words only, e.g. "perseus pro v 16mm"). Never guess prices or stock. If it returns `enabled: false` or no results, say you can't check live stock right now and offer an email follow-up. |
+| General product, sizing, lens, shipping-destination or registration question your built-in knowledge (§2) does not cover | `search_knowledge` (pass the question in plain words). Policy in §2 always wins over a snippet. If it returns `enabled: false` or no results, answer from §2 or offer a follow-up email. |
 
 **Tool call etiquette:**
 - Say something natural while the tool runs: "Let me pull that up… one sec." Never go silent.
