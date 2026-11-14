@@ -16,6 +16,8 @@ from typing import Any
 
 import httpx
 
+from app.brand import normalize_brand
+
 log = logging.getLogger(__name__)
 
 PRODUCTS_QUERY = """
@@ -83,7 +85,7 @@ MIN_DISCOUNT_RATIO = 0.01
 
 def extract_keywords(query: str) -> list[str]:
     """Lower-case product words; spoken 'pro five' becomes 'pro v'. Deduplicated, capped."""
-    text = _APOSTROPHE.sub("", _POSSESSIVE.sub("", query.lower()))
+    text = _APOSTROPHE.sub("", _POSSESSIVE.sub("", normalize_brand(query).lower()))
     text = _PUNCT.sub(" ", text)
     text = _SPOKEN_NUMBER.sub(lambda m: _NUMBER_WORDS[m.group(1)] + " ", text)
     text = _THICKNESS.sub(r"\1mm", text)

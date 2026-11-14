@@ -12,6 +12,8 @@
     "vapi:update-webhook:apply": "tsx src/update-webhook.ts --apply",
     "vapi:add-tool": "tsx src/add-tool.ts",
     "vapi:add-tool:apply": "tsx src/add-tool.ts --apply",
+    "vapi:fix-brand-voice": "tsx src/fix-brand-voice.ts",
+    "vapi:fix-brand-voice:apply": "tsx src/fix-brand-voice.ts --apply",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

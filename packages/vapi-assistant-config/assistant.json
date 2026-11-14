@@ -9,8 +9,20 @@
   },
   "voice": {
     "provider": "openai",
-    "voiceId": "alloy"
+    "voiceId": "alloy",
+    "chunkPlan": {
+      "enabled": true,
+      "formatPlan": {
+        "enabled": true,
+        "replacements": [
+          { "type": "exact", "key": "JOOLA", "value": "Yoola", "replaceAllEnabled": true },
+          { "type": "exact", "key": "Joola", "value": "Yoola", "replaceAllEnabled": true },
+          { "type": "exact", "key": "joola", "value": "Yoola", "replaceAllEnabled": true }
+        ]
+      }
+    }
   },
+  "transcriber": { "provider": "deepgram", "model": "flux-general-en", "keyterm": ["JOOLA"] },
   "firstMessage": "Hi! This is JOOLA customer support. I'm here to help with returns, warranty claims, or any questions about your products. How can I help you today?",
   "endCallMessage": "Thanks for calling JOOLA. Have a great day, and don't hesitate to reach out again if you need anything.",
   "endCallPhrases": ["goodbye", "bye", "talk to you later"],

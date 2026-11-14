@@ -13,6 +13,7 @@ from typing import Any
 
 from supabase import Client, ClientOptions, create_client
 
+from app.brand import normalize_brand
 from app.config import get_settings
 from app.memory.store import SupabaseKnowledgeStore
 from app.services.openai_client import get_openai
@@ -70,7 +71,7 @@ async def search_knowledge(query: str, k: int = DEFAULT_K) -> list[dict[str, Any
         return []
 
     def _search() -> list[dict[str, Any]]:
-        return get_store().match(embed_query(query), k, MIN_SCORE)
+        return get_store().match(embed_query(normalize_brand(query)), k, MIN_SCORE)
 
     try:
         return await asyncio.wait_for(asyncio.to_thread(_search), timeout=SEARCH_BUDGET_S)
