@@ -285,7 +285,7 @@ export function ScenarioHints({ channel }: Props) {
                     </span>
                     <span
                       className={cx(
-                        'shrink-0 rounded-pill px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide',
+                        'max-w-[60%] break-words text-right rounded-pill px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide',
                         s.tone === 'good' && 'bg-emerald-50 text-emerald-700',
                         s.tone === 'decline' && 'bg-rose-50 text-rose-700',
                         s.tone === 'escalate' && 'bg-amber-50 text-amber-700',

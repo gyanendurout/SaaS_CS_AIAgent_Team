@@ -68,6 +68,11 @@ class Settings(BaseSettings):
     shopify_admin_client_secret: str = Field(
         default="", description="Shopify app client secret (client-credentials token grant)"
     )
+    order_sample_email_domains: str = Field(
+        default="",
+        description="Comma list of email domains shown in full on the demo order cards; "
+        "'*' = all (sandbox only). Others are masked like p***@g***.com",
+    )
 
     ai_agents_secret: str = Field(
         default="",

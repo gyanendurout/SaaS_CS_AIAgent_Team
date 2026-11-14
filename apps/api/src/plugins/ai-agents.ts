@@ -118,6 +118,18 @@ export interface GetOrderStatusResult {
   order: OrderStatus | null;
 }
 
+export interface LiveOrder extends OrderStatus {
+  /** Full email only for allow-listed domains; otherwise masked like p***@g***.com. */
+  email_hint: string | null;
+}
+
+export interface LiveOrdersResult {
+  /** false while ai-agents runs with ORDER_SOURCE=off. */
+  enabled: boolean;
+  orders: LiveOrder[];
+  error?: string | null;
+}
+
 export interface AiAgentsClient {
   /**
    * `claimInput` must be in `warranty_policy.ClaimInput` shape (the route is
@@ -133,6 +145,7 @@ export interface AiAgentsClient {
     email?: string;
     postcode?: string;
   }): Promise<GetOrderStatusResult>;
+  listLiveOrders(limit: number): Promise<LiveOrdersResult>;
 }
 
 declare module 'fastify' {
@@ -217,6 +230,14 @@ const aiAgentsPlugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       return postJson<SearchProductsResult>(
         `${base}/tools/search_products`,
         { query },
+        app.log,
+        LIVE_TOOL_TIMEOUT_MS,
+      );
+    },
+    async listLiveOrders(limit) {
+      return postJson<LiveOrdersResult>(
+        `${base}/tools/live_orders`,
+        { limit },
         app.log,
         LIVE_TOOL_TIMEOUT_MS,
       );

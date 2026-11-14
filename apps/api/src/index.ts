@@ -36,6 +36,7 @@ import sendAwaitReplyRoute from './routes/cases/send-await-reply.js';
 import emailInboundRoute from './routes/customer/email-inbound.js';
 import voiceStartRoute from './routes/customer/voice-start.js';
 import webInboundRoute from './routes/customer/web-inbound.js';
+import liveOrdersRoute from './routes/customer/live-orders.js';
 import checkRegRoute from './routes/tools/check-warranty-registration.js';
 import createClaimRoute from './routes/tools/create-claim.js';
 import escalateToHumanRoute from './routes/tools/escalate-to-human.js';
@@ -96,6 +97,7 @@ async function buildServer(): Promise<FastifyInstance> {
   await app.register(voiceStartRoute);
   await app.register(emailInboundRoute);
   await app.register(webInboundRoute);
+  await app.register(liveOrdersRoute);
 
   // Case lifecycle
   await app.register(reopenRoute);

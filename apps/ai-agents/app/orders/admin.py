@@ -46,6 +46,29 @@ query OrderStatus($q: String!) {
 }
 """
 
+# Demo order cards: newest first, no addresses requested at all.
+LIST_QUERY = """
+query RecentOrders($first: Int!) {
+  orders(first: $first, sortKey: CREATED_AT, reverse: true) {
+    nodes {
+      name
+      createdAt
+      cancelledAt
+      displayFinancialStatus
+      displayFulfillmentStatus
+      email
+      lineItems(first: 20) { nodes { title quantity } }
+      fulfillments(first: 10) {
+        displayStatus
+        trackingInfo(first: 5) { company number url }
+      }
+      returns(first: 5) { nodes { name status } }
+    }
+  }
+}
+"""
+MAX_LIST = 20
+
 _TRANSIENT = ("throttled", "internal error", "timeout", "temporarily unavailable")
 _TOKEN_REFRESH_MARGIN_S = 300.0
 _MAX_DIGITS = 10
@@ -80,6 +103,21 @@ def verify_caller(order: dict[str, Any], *, email: str | None, postcode: str | N
         _norm_zip((order.get(kind) or {}).get("zip")) for kind in ("shippingAddress", "billingAddress")
     }
     return given_zip in on_order - {""}
+
+
+def mask_email(email: str | None, *, allow: frozenset[str]) -> str | None:
+    """Full email if its domain is allow-listed (or allow has "*"), else "p***@g***.com"."""
+    value = (email or "").strip()
+    if value.count("@") != 1:
+        return None
+    local, domain = value.split("@")
+    if not local or not domain:
+        return None
+    if "*" in allow or domain.lower() in allow:
+        return value
+    labels = domain.split(".")
+    tail = f".{labels[-1]}" if len(labels) > 1 else ""
+    return f"{local[0]}***@{labels[0][:1]}***{tail}"
 
 
 def map_order(raw: dict[str, Any]) -> dict[str, Any]:
@@ -173,19 +211,29 @@ class AdminClient:
     async def find_order(self, number: str) -> dict[str, Any] | None:
         """The order named exactly ``#<number>``, or None."""
         async with asyncio.timeout(self._deadline):
-            data = await self._graphql({"q": f"name:#{number}"})
+            data = await self._graphql(ORDER_QUERY, {"q": f"name:#{number}"})
         for node in (data.get("orders") or {}).get("nodes") or []:
             # Digits only, so a store order prefix/suffix (e.g. "#JL5301") still matches.
             if re.sub(r"\D", "", str(node.get("name") or "")) == number:
                 return dict(node)
         return None
 
-    async def _graphql(self, variables: dict[str, Any]) -> dict[str, Any]:
+    async def list_recent_orders(self, limit: int, allow: frozenset[str]) -> list[dict[str, Any]]:
+        """Newest orders, status-only, with a masked email hint (demo order cards)."""
+        first = max(1, min(int(limit), MAX_LIST))
+        async with asyncio.timeout(self._deadline):
+            data = await self._graphql(LIST_QUERY, {"first": first})
+        return [
+            {**map_order(node), "email_hint": mask_email(node.get("email"), allow=allow)}
+            for node in (data.get("orders") or {}).get("nodes") or []
+        ]
+
+    async def _graphql(self, query: str, variables: dict[str, Any]) -> dict[str, Any]:
         refreshed = False
         attempt = 1
         while True:
             try:
-                return await self._graphql_once(variables)
+                return await self._graphql_once(query, variables)
             except httpx.HTTPStatusError as error:
                 if error.response.status_code == 401 and not refreshed:
                     self._token = None  # expired or revoked: fetch a new one once
@@ -202,11 +250,11 @@ class AdminClient:
                 await asyncio.sleep(self._retry_delay * attempt)
                 attempt += 1
 
-    async def _graphql_once(self, variables: dict[str, Any]) -> dict[str, Any]:
+    async def _graphql_once(self, query: str, variables: dict[str, Any]) -> dict[str, Any]:
         token = await self._access_token()
         response = await self._client().post(
             self._graphql_url,
-            json={"query": ORDER_QUERY, "variables": variables},
+            json={"query": query, "variables": variables},
             headers={"X-Shopify-Access-Token": token},
         )
         if response.status_code in (429, 430) or response.status_code >= 500:

@@ -29,7 +29,7 @@ from app.deps import require_internal_secret
 from app.graph.build import get_compiled_graph
 from app.graph.state import PipelineState
 from app.memory.service import search_knowledge
-from app.orders.service import get_order_status, orders_enabled
+from app.orders.service import get_order_status, list_live_orders, orders_enabled
 from app.services.audit import write_case_event
 from app.services.supabase_client import get_supabase
 from warranty_policy import ClaimInput, DecisionResult, evaluate
@@ -456,3 +456,34 @@ async def get_order_status_route(req: GetOrderStatusRequest) -> GetOrderStatusRe
     result = await get_order_status(req.order_number, email=req.email, postcode=req.postcode)
     order = OrderStatus(**result["order"]) if result["order"] else None
     return GetOrderStatusResponse(enabled=orders_enabled(), status=result["status"], order=order)
+
+
+class LiveOrdersRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    limit: int = Field(default=10, ge=1, le=20)
+
+
+class LiveOrder(OrderStatus):
+    email_hint: str | None
+
+
+class LiveOrdersResponse(BaseModel):
+    enabled: bool
+    orders: list[LiveOrder]
+    error: str | None = None
+
+
+@router.post(
+    "/live_orders",
+    response_model=LiveOrdersResponse,
+    dependencies=[Depends(require_internal_secret)],
+)
+async def live_orders_route(req: LiveOrdersRequest) -> LiveOrdersResponse:
+    """Newest Team JOOLA sandbox orders for the demo page (masked email hints, no addresses)."""
+    result = await list_live_orders(req.limit)
+    return LiveOrdersResponse(
+        enabled=result["enabled"],
+        orders=[LiveOrder(**o) for o in result["orders"]],
+        error=result.get("error"),
+    )

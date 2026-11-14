@@ -16,7 +16,13 @@ from fastapi.testclient import TestClient
 from app.config import get_settings
 from app.main import app
 from app.orders import service
-from app.orders.admin import AdminClient, map_order, parse_order_number, verify_caller
+from app.orders.admin import (
+    AdminClient,
+    map_order,
+    mask_email,
+    parse_order_number,
+    verify_caller,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -69,6 +75,7 @@ class _Shopify:
         self.token_calls = 0
         self.queries: list[dict[str, Any]] = []
         self.tokens_seen: list[str] = []
+        self.query_texts: list[str] = []
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
         if request.url.path == "/admin/oauth/access_token":
@@ -82,7 +89,9 @@ class _Shopify:
             return httpx.Response(200, json={"access_token": f"tok-{self.token_calls}", "expires_in": 86399})
         assert request.url.path == "/admin/api/2026-07/graphql.json"
         self.tokens_seen.append(request.headers["X-Shopify-Access-Token"])
-        self.queries.append(json.loads(request.content)["variables"])
+        payload = json.loads(request.content)
+        self.queries.append(payload["variables"])
+        self.query_texts.append(payload["query"])
         if self.graphql_status != 200:
             status, self.graphql_status = self.graphql_status, 200
             return httpx.Response(status)
@@ -311,3 +320,90 @@ async def test_old_failures_expire(orders_on, monkeypatch: pytest.MonkeyPatch) -
         await service.get_order_status("5301", postcode="00000")
     clock[0] += service.FAIL_WINDOW_S + 1
     assert (await service.get_order_status("5301", email="pat@example.test"))["status"] == "ok"
+
+
+# ---- live order cards (demo) ----------------------------------------------- #
+
+NONE: frozenset[str] = frozenset()
+
+
+def test_mask_email() -> None:
+    assert mask_email("pat.smith@gmail.com", allow=NONE) == "p***@g***.com"
+    assert mask_email("qa@joola.com", allow=frozenset({"joola.com"})) == "qa@joola.com"
+    assert mask_email("QA@Joola.COM", allow=frozenset({"joola.com"})) == "QA@Joola.COM"
+    assert mask_email("pat@gmail.com", allow=frozenset({"*"})) == "pat@gmail.com"
+    assert mask_email("a@b", allow=NONE) == "a***@b***"
+    assert mask_email("x@mail.co.uk", allow=NONE) == "x***@m***.uk"
+    assert mask_email(None, allow=NONE) is None
+    assert mask_email("not-an-email", allow=NONE) is None
+    assert mask_email("  ", allow=NONE) is None
+
+
+async def test_list_recent_orders_maps_and_masks() -> None:
+    fake = _Shopify(orders=[_order(name="#5301"), _order(name="#5300", email="qa@joola.com")])
+    rows = await _client(fake).list_recent_orders(limit=2, allow=frozenset({"joola.com"}))
+    assert [r["order_number"] for r in rows] == ["#5301", "#5300"]
+    assert rows[0]["email_hint"] == "p***@e***.test"
+    assert rows[1]["email_hint"] == "qa@joola.com"
+    assert rows[0]["fulfillment_status"] == "FULFILLED"
+    assert "20852" not in json.dumps(rows)  # postcodes never leave
+    assert fake.queries == [{"first": 2}]
+    assert "sortKey: CREATED_AT" in fake.query_texts[0] and "reverse: true" in fake.query_texts[0]
+    assert "Address" not in fake.query_texts[0]  # addresses are not even requested
+
+
+async def test_list_recent_orders_clamps_limit() -> None:
+    fake = _Shopify(orders=[])
+    await _client(fake).list_recent_orders(limit=500, allow=NONE)
+    await _client(fake).list_recent_orders(limit=0, allow=NONE)
+    assert fake.queries == [{"first": 20}, {"first": 1}]
+
+
+async def test_live_orders_disabled_by_default() -> None:
+    assert await service.list_live_orders() == {"enabled": False, "orders": []}
+
+
+async def test_live_orders_lists_and_caches(orders_on, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ORDER_SAMPLE_EMAIL_DOMAINS", " Joola.com , example.test ")
+    get_settings.cache_clear()
+    fake = _Shopify()
+    _use(monkeypatch, fake)
+    first = await service.list_live_orders(limit=5)
+    second = await service.list_live_orders(limit=5)
+    assert first == second
+    assert first["enabled"] is True and first["orders"][0]["email_hint"] == "pat@example.test"
+    assert len(fake.queries) == 1  # cached
+    service.reset_client()
+    await service.list_live_orders(limit=5)
+    assert len(fake.queries) == 2
+
+
+async def test_live_orders_outage(orders_on, monkeypatch: pytest.MonkeyPatch) -> None:
+    class _Down:
+        async def list_recent_orders(self, limit: int, allow: frozenset[str]) -> list:
+            raise httpx.ConnectError("down")
+
+    monkeypatch.setattr(service, "get_client", lambda: _Down())
+    assert await service.list_live_orders() == {"enabled": True, "orders": [], "error": "unavailable"}
+
+
+def test_live_orders_route(orders_on, monkeypatch: pytest.MonkeyPatch) -> None:
+    _use(monkeypatch, _Shopify())
+    client = TestClient(app)
+    body = client.post("/tools/live_orders", json={"limit": 3}).json()
+    assert body["enabled"] is True and body["orders"][0]["order_number"] == "#5301"
+    assert body["orders"][0]["email_hint"] == "p***@e***.test"
+    assert client.post("/tools/live_orders", json={"limit": 0}).status_code == 422
+    assert client.post("/tools/live_orders", json={"limit": 21}).status_code == 422
+
+
+def test_live_orders_route_off_and_secret(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = TestClient(app)
+    assert client.post("/tools/live_orders", json={}).json() == {"enabled": False, "orders": [], "error": None}
+    monkeypatch.setenv("AI_AGENTS_SECRET", "s3cret")
+    get_settings.cache_clear()
+    assert client.post("/tools/live_orders", json={}).status_code == 401
+
+
+def test_health_reports_orders_switch(orders_on) -> None:
+    assert TestClient(app).get("/health").json()["orders_enabled"] is True

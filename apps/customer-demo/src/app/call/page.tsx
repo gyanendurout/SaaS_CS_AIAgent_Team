@@ -19,6 +19,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { ChannelNav } from '@/components/ChannelNav';
+import { LiveOrders } from '@/components/LiveOrders';
 import { ScenarioHints } from '@/components/ScenarioHints';
 import { Card, CardEyebrow, CardHeader, CardTitle } from '@/components/ui/Card';
 import { LiveTranscript } from '@/components/voice/LiveTranscript';
@@ -270,6 +271,7 @@ export default function CallPage() {
         </div>
       </main>
       <ScenarioHints channel="voice" />
+      <LiveOrders />
     </>
   );
 }

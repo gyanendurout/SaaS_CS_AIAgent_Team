@@ -53,6 +53,35 @@ def get_client() -> AdminClient:
 def reset_client() -> None:
     global _client, _client_key
     _client, _client_key = None, None
+    _list_cache.clear()
+
+
+# --- demo order cards -------------------------------------------------------- #
+
+LIST_CACHE_TTL_S = 60.0
+_list_cache: dict[int, tuple[float, dict[str, Any]]] = {}
+
+
+def _email_allowlist() -> frozenset[str]:
+    raw = get_settings().order_sample_email_domains
+    return frozenset(d.strip().lower() for d in raw.split(",") if d.strip())
+
+
+async def list_live_orders(limit: int = 10) -> dict[str, Any]:
+    """Newest sandbox orders for the demo page. Never raises; cached 60 s."""
+    if not orders_enabled():
+        return {"enabled": False, "orders": []}
+    hit = _list_cache.get(limit)
+    if hit and time.monotonic() - hit[0] < LIST_CACHE_TTL_S:
+        return hit[1]
+    try:
+        orders = await get_client().list_recent_orders(limit, _email_allowlist())
+    except Exception:
+        log.warning("Shopify recent-orders list failed; demo cards empty", exc_info=True)
+        return {"enabled": True, "orders": [], "error": "unavailable"}
+    result = {"enabled": True, "orders": orders}
+    _list_cache[limit] = (time.monotonic(), result)
+    return result
 
 
 # Failed-check brake (per warm instance; Vapi calls are signed, so this caps a
