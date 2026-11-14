@@ -295,7 +295,19 @@ needs the Shopify Admin API), using stock inside email/web drafts.
   (no `write_`). Dev Dashboard apps had no separate protected-data / read-all-orders request: email,
   postcode and full history were readable straight after install (checked 2026-11-14).
   Log line "Shopify denied order fields" = protected data / scope missing.
+- **Brake:** only postcode misses count (5 per order / 50 overall per 15 min); when braked the
+  postcode is ignored but the email still works.
+- **Demo order cards:** `GET /api/customer/live_orders?limit=1..20` → ai-agents `/tools/live_orders`
+  (60 s cache). `ORDER_SAMPLE_EMAIL_DOMAINS` = comma list of domains shown in full, `*` = all,
+  unset = all masked. Shown on the demo call page ("Order status — real sandbox orders").
 - **Roll back:** `ORDER_SOURCE=off` (or remove the Vapi tool via backup restore).
+
+### 10c. Tool endpoints are internal
+
+`/api/tools/*` answers only in-process calls from the signed Vapi webhook (`x-internal-tool-call`
+token generated at boot). Direct HTTP calls → 403 `forbidden`. Local manual testing:
+`TOOL_ROUTES_OPEN=true` in `apps/api/.env.local` (never in Vercel). To test the real path, send a
+signed `tool-calls` message to `/webhooks/vapi`.
 
 ## 11. Known limitations
 

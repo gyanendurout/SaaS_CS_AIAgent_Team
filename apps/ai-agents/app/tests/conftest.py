@@ -24,6 +24,7 @@ os.environ.setdefault("POLICY_VERSION", "1.0.0")
 os.environ["KNOWLEDGE_SOURCE"] = "static"
 os.environ["CATALOG_SOURCE"] = "off"
 os.environ["ORDER_SOURCE"] = "off"
+os.environ["ORDER_SAMPLE_EMAIL_DOMAINS"] = ""
 os.environ["AI_AGENTS_SECRET"] = ""
 
 

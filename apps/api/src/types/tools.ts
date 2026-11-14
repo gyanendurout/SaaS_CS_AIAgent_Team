@@ -69,12 +69,38 @@ export const EscalationPriorityEnum = z.enum(['urgent', 'high', 'norm']);
 
 export const CountryEnum = z.enum(['US', 'CA', 'PR', 'OTHER']);
 
+// --- shared field rules ---------------------------------------------------
+// Order numbers go into Supabase filters (`.ilike`, `.or(...)`): only letters,
+// digits, spaces, '#' and '-' are allowed, so '%', '_', ',', '.', '(' can never
+// turn a lookup into a wildcard or extra filter (QA 2026-11-14, D1 critical).
+export const OrderNumberField = z
+  .string()
+  .trim()
+  .min(1)
+  .max(40)
+  .regex(/^[A-Za-z0-9# -]+$/, 'order number: letters, digits, spaces, # and - only');
+export const EmailField = z.string().trim().max(254).email();
+export const NfcIdField = z
+  .string()
+  .trim()
+  .min(1)
+  .max(64)
+  .regex(/^[A-Za-z0-9:_-]+$/, 'nfc_id: letters, digits, :, _ and - only');
+export const IsoDateField = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, 'YYYY-MM-DD')
+  .refine((s) => {
+    const d = new Date(`${s}T00:00:00Z`);
+    return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
+  }, 'not a real calendar date');
+const IssueField = z.string().trim().min(1).max(4000);
+
 // --- lookup_order ----------------------------------------------------------
 
 export const LookupOrderInput = z
   .object({
-    order_number: z.string().min(1).optional(),
-    customer_email: z.string().email().optional(),
+    order_number: OrderNumberField.optional(),
+    customer_email: EmailField.optional(),
   })
   .refine((d) => Boolean(d.order_number || d.customer_email), {
     message: 'Provide order_number or customer_email',
@@ -86,8 +112,8 @@ export type LookupOrderInput = z.infer<typeof LookupOrderInput>;
 export const CheckRegistrationInput = z
   .object({
     order_id: z.string().uuid().optional(),
-    order_number: z.string().min(1).optional(),
-    nfc_id: z.string().min(1).optional(),
+    order_number: OrderNumberField.optional(),
+    nfc_id: NfcIdField.optional(),
   })
   .refine((d) => Boolean(d.order_id || d.order_number || d.nfc_id), {
     message: 'Provide order_id, order_number, or nfc_id',
@@ -98,15 +124,12 @@ export type CheckRegistrationInput = z.infer<typeof CheckRegistrationInput>;
 
 export const EvaluateEligibilityInput = z.object({
   order_id: z.string().uuid().optional(),
-  order_number: z.string().min(1).optional(),
-  customer_email: z.string().email().optional(),
+  order_number: OrderNumberField.optional(),
+  customer_email: EmailField.optional(),
   product_type: ProductTypeEnum,
   order_source: OrderSourceEnum.optional(),
-  purchase_date: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, 'YYYY-MM-DD')
-    .optional(),
-  issue: z.string().min(1),
+  purchase_date: IsoDateField.optional(),
+  issue: IssueField,
   is_defective: z.boolean(),
   is_original_purchaser: z.boolean(),
   country: CountryEnum.optional(),
@@ -121,16 +144,16 @@ export type EvaluateEligibilityInput = z.infer<typeof EvaluateEligibilityInput>;
 
 export const CreateClaimInput = z.object({
   customer_id: z.string().uuid().optional(),
-  customer_email: z.string().email().optional(),
-  customer_name: z.string().min(1).optional(),
+  customer_email: EmailField.optional(),
+  customer_name: z.string().trim().min(1).max(200).optional(),
   order_id: z.string().uuid().optional(),
-  order_number: z.string().min(1).optional(),
+  order_number: OrderNumberField.optional(),
   channel: z.enum(['voice']).default('voice'),
-  issue: z.string().min(1),
+  issue: IssueField,
   is_defective: z.boolean(),
   decision: DecisionEnum.optional(),
-  reason_code: z.string().optional(),
-  citation: z.string().optional(),
+  reason_code: z.string().max(100).optional(),
+  citation: z.string().max(500).optional(),
   sentiment: z.number().min(0).max(1).optional(),
 });
 export type CreateClaimInput = z.infer<typeof CreateClaimInput>;

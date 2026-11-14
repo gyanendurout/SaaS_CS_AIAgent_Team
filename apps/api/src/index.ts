@@ -46,6 +46,7 @@ import searchKnowledgeRoute from './routes/tools/search-knowledge.js';
 import searchProductsRoute from './routes/tools/search-products.js';
 import getOrderStatusRoute from './routes/tools/get-order-status.js';
 import vapiWebhookRoute from './routes/webhooks/vapi.js';
+import { requireInternalToolCall } from './lib/internal-tools.js';
 
 async function buildServer(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -76,6 +77,9 @@ async function buildServer(): Promise<FastifyInstance> {
   await app.register(supabasePlugin);
   await app.register(aiAgentsPlugin);
   await app.register(auditPlugin);
+
+  // /api/tools/* only via the signed Vapi webhook (in-process inject).
+  app.addHook('onRequest', requireInternalToolCall);
 
   // ---- Routes ----------------------------------------------------------
   await app.register(healthRoute);

@@ -17,6 +17,11 @@ steps, open decisions, roadmap). How to run/deploy: [docs/CS_MEMORY_RUNBOOK.md](
   also for Vercel/Vapi production. Never point any code, token or app at a live JOOLA store (JOOLA-USA etc.).
 - Do not touch the `natt_events*` RDS databases — they belong to a different project.
 - Changes to the live Vapi assistant, Vercel, or git push need the owner's explicit OK.
+- `/api/tools/*` is reachable **only** through the signed Vapi webhook (in-process inject with a
+  per-boot token, `apps/api/src/lib/internal-tools.ts`); direct calls get 403. For local manual
+  testing set `TOOL_ROUTES_OPEN=true` in `apps/api/.env.local` — never in Vercel.
+- Order numbers / emails reaching Supabase filters must go through `OrderNumberField` /
+  `EmailField` (`apps/api/src/types/tools.ts`) and `escapeLike()` — never interpolate raw input.
 
 ## Security boundaries
 

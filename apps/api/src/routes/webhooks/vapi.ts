@@ -25,6 +25,7 @@ import type {
   VapiTranscriptMessage,
   VapiWebhookEnvelope,
 } from '../../types/vapi.js';
+import { INTERNAL_TOOL_HEADER, INTERNAL_TOOL_TOKEN } from '../../lib/internal-tools.js';
 
 /** Local minimal request type to access the parsed body without re-importing types. */
 type ReqWithRawBody = FastifyRequest<{ Body: VapiWebhookEnvelope }>;
@@ -453,7 +454,10 @@ async function invokeOneTool(
     method: 'POST',
     url: path,
     payload: params,
-    headers: { 'content-type': 'application/json' },
+    headers: {
+      'content-type': 'application/json',
+      [INTERNAL_TOOL_HEADER]: INTERNAL_TOOL_TOKEN,
+    },
   });
 
   let payload: unknown = resp.body;

@@ -14,6 +14,7 @@ import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 
 import type { ClaimRow, CustomerRow } from '../../types/domain.js';
+import { escapeLike } from '../../lib/like.js';
 
 const Body = z
   .object({
@@ -43,7 +44,7 @@ const route: FastifyPluginAsync = async (app) => {
       const { data, error } = await app.supabase
         .from('customers')
         .select('id')
-        .ilike('email', input.customer_email!)
+        .ilike('email', escapeLike(input.customer_email!))
         .limit(1)
         .maybeSingle();
       if (error) {

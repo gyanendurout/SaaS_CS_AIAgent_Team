@@ -12,6 +12,7 @@ import type { FastifyPluginAsync } from 'fastify';
 
 import { LookupOrderInput } from '../../types/tools.js';
 import type { OrderRow, CustomerRow, RegistrationRow } from '../../types/domain.js';
+import { escapeLike } from '../../lib/like.js';
 
 // Maps spoken digit words (from voice transcripts) to their numeric characters.
 const DIGIT_WORDS: Record<string, string> = {
@@ -57,7 +58,7 @@ const route: FastifyPluginAsync = async (app) => {
       const { data, error } = await app.supabase
         .from('orders')
         .select('*, customers(*)')
-        .ilike('order_number', input.order_number)
+        .ilike('order_number', escapeLike(input.order_number))
         .limit(1)
         .maybeSingle();
       if (error) {
@@ -99,7 +100,7 @@ const route: FastifyPluginAsync = async (app) => {
       const { data: c, error: cerr } = await app.supabase
         .from('customers')
         .select('*')
-        .ilike('email', input.customer_email)
+        .ilike('email', escapeLike(input.customer_email))
         .limit(1)
         .maybeSingle();
       if (cerr) {

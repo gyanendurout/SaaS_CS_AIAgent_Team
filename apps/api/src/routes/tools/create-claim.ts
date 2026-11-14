@@ -12,6 +12,7 @@ import type { FastifyPluginAsync } from 'fastify';
 
 import { CreateClaimInput } from '../../types/tools.js';
 import type { ClaimRow, CustomerRow, OrderRow } from '../../types/domain.js';
+import { escapeLike } from '../../lib/like.js';
 
 const route: FastifyPluginAsync = async (app) => {
   app.post('/api/tools/create_claim', async (req, reply) => {
@@ -37,7 +38,7 @@ const route: FastifyPluginAsync = async (app) => {
       const { data: existing, error: lookupErr } = await app.supabase
         .from('customers')
         .select('id')
-        .ilike('email', input.customer_email)
+        .ilike('email', escapeLike(input.customer_email))
         .limit(1)
         .maybeSingle();
       if (lookupErr) {

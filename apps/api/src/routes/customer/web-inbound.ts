@@ -12,13 +12,15 @@ import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 
 import type { ClaimRow, CustomerRow, OrderRow } from '../../types/domain.js';
+import { escapeLike } from '../../lib/like.js';
+import { EmailField, OrderNumberField } from '../../types/tools.js';
 
 const Body = z
   .object({
     customer_id: z.string().uuid().optional(),
-    customer_email: z.string().email().optional(),
+    customer_email: EmailField.optional(),
     customer_name: z.string().min(1).optional(),
-    order_number: z.string().min(1).optional(),
+    order_number: OrderNumberField.optional(),
     product: z.string().min(1).optional(),
     issue: z.string().min(5, 'issue must be at least 5 characters'),
     urgency: z.enum(['low', 'normal', 'high', 'urgent']).default('normal'),
@@ -45,7 +47,7 @@ const route: FastifyPluginAsync = async (app) => {
       const { data: existing, error } = await app.supabase
         .from('customers')
         .select('id')
-        .ilike('email', input.customer_email!)
+        .ilike('email', escapeLike(input.customer_email!))
         .limit(1)
         .maybeSingle();
       if (error) {

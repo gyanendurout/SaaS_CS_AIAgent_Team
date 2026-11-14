@@ -46,6 +46,7 @@ the "Infinity" connector, gap logging.
 | `f61e83e` | QA pass: voice-phrasing fixes, connection pooling, timeouts, `AI_AGENTS_SECRET`, `/health` switches, QA report |
 | `57d5f8f`…`020268e` | docs: handoff, go-live state, Vercel preview env fix, Vapi webhook → Vercel (all pushed, `main` = `020268e`) |
 | `2d85522` + `045f9fb` | fix: JOOLA pronounced "YOO-la" on calls (Vapi part live) + misheard-brand mapping in searches — pushed to `main`, ai-agents + api redeployed READY |
+| `b0ed7cd` + QA fixes | feat: live Shopify order cards on the demo call page (`ORDER_SAMPLE_EMAIL_DOMAINS`), full QA pass ([report](qa/2026-11-14-full-qa.md)): **critical** fix — `/api/tools/*` only via signed Vapi webhook + strict order-number/email input rules; catalogue decimals + product links; postcode-only brake; 8 s live-tool timeout. Local, not pushed |
 | `5590e9a` | feat: `get_order_status` — live Shopify Admin order status (Team JOOLA sandbox), caller check by email or postcode, failed-check brake, no personal data returned; behind `ORDER_SOURCE` (on in Vercel since 2026-11-14) |
 
 **Behaviour switches (all default OFF = original behaviour):**

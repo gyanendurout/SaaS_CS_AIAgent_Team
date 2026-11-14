@@ -69,8 +69,10 @@ _UNIT = r"(?:mm|millimet(?:er|re)s?)\b"
 _SPOKEN_NUMBER = re.compile(
     r"\b(" + "|".join(sorted(_NUMBER_WORDS, key=len, reverse=True)) + r")\s+(?=" + _UNIT + ")"
 )
-_THICKNESS = re.compile(r"\b(\d+)\s*" + _UNIT)
-_PUNCT = re.compile(r"[^\w\s]")
+_THICKNESS = re.compile(r"\b(\d+(?:\.\d+)?)\s*" + _UNIT)
+# Punctuation becomes a space, except a dot inside a number: "13.5" stays one token
+# (Shopify's title search matches it whole; splitting it lost the exact paddle).
+_PUNCT = re.compile(r"(?!(?<=\d)\.(?=\d))[^\w\s]")
 # Straight and curly (U+2019) apostrophes: "joola's" -> "joola", "don't" -> "dont",
 # so a possessive never becomes a stray "s"/"t" keyword.
 _POSSESSIVE = re.compile(r"['’]s\b")  # noqa: RUF001
@@ -116,7 +118,7 @@ def _on_sale(price: float | None, compare: float | None) -> bool:
     return bool(price and compare and compare - price >= compare * MIN_DISCOUNT_RATIO)
 
 
-def map_product(raw: dict[str, Any]) -> dict[str, Any]:
+def map_product(raw: dict[str, Any], store: str | None = None) -> dict[str, Any]:
     variants = [
         {
             "title": v.get("title"),
@@ -135,7 +137,10 @@ def map_product(raw: dict[str, Any]) -> dict[str, Any]:
         available = any(v["available"] for v in variants)
     return {
         "title": raw.get("title"),
-        "url": raw.get("onlineStoreUrl"),
+        # Sandbox products aren't on the Online Store channel (onlineStoreUrl=null);
+        # /products/<handle> on the store domain redirects to the storefront.
+        "url": raw.get("onlineStoreUrl")
+        or (f"https://{store}/products/{raw['handle']}" if store and raw.get("handle") else None),
         "price": headline["price"],
         "compare_at_price": headline["compare_at_price"],
         "on_sale": _on_sale(headline["price"], headline["compare_at_price"]),
@@ -158,6 +163,7 @@ class StorefrontClient:
         deadline: float = 4.5,
         transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
+        self._store = store
         self._url = f"https://{store}/api/{api_version}/graphql.json"
         self._headers = {"X-Shopify-Storefront-Access-Token": token}
         self._timeout = timeout
@@ -217,7 +223,7 @@ class StorefrontClient:
             if title.lower() in seen:
                 continue
             seen.add(title.lower())
-            results.append(map_product(node))
+            results.append(map_product(node, self._store))
             if len(results) == limit:
                 break
         return results

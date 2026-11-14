@@ -22,6 +22,7 @@ import type {
   RegistrationRow,
 } from '../../types/domain.js';
 import { EvaluateEligibilityInput } from '../../types/tools.js';
+import { escapeLike } from '../../lib/like.js';
 
 const route: FastifyPluginAsync = async (app) => {
   app.post('/api/tools/evaluate_eligibility', async (req, reply) => {
@@ -100,7 +101,7 @@ async function buildClaimInput(
     const { data: cust } = await app.supabase
       .from('customers')
       .select('id, country')
-      .ilike('email', input.customer_email)
+      .ilike('email', escapeLike(input.customer_email))
       .limit(1)
       .maybeSingle();
     if (cust) {

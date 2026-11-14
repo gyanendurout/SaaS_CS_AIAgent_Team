@@ -290,18 +290,28 @@ async def test_prefixed_store_order_names_match_on_digits() -> None:
     assert order is not None
 
 
-async def test_guessing_is_braked_per_order_even_with_right_details(
+async def test_postcode_guessing_is_braked_but_email_still_works(
     orders_on, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """Postcodes are guessable, emails are not: only postcode misses count, and the
+    real owner can still get in with their email (no lock-out by a stranger)."""
     fake = _Shopify()
     _use(monkeypatch, fake)
     for _ in range(service.MAX_FAILS_PER_ORDER):
         assert (await service.get_order_status("5301", postcode="00000"))["status"] == "not_found"
-    blocked = await service.get_order_status("5301", email="pat@example.test")
+    blocked = await service.get_order_status("5301", postcode="20852")  # even the right one
     assert blocked == {"status": "too_many_attempts", "order": None}
     assert len(fake.queries) == service.MAX_FAILS_PER_ORDER  # Shopify not called once blocked
+    assert (await service.get_order_status("5301", email="pat@example.test"))["status"] == "ok"
     # other order numbers are unaffected
-    assert (await service.get_order_status("5302", email="x@y.test"))["status"] == "not_found"
+    assert (await service.get_order_status("5302", postcode="00000"))["status"] == "not_found"
+
+
+async def test_wrong_emails_do_not_lock_the_order(orders_on, monkeypatch: pytest.MonkeyPatch) -> None:
+    _use(monkeypatch, _Shopify())
+    for _ in range(service.MAX_FAILS_PER_ORDER + 3):
+        assert (await service.get_order_status("5301", email="x@y.test"))["status"] == "not_found"
+    assert (await service.get_order_status("5301", postcode="20852"))["status"] == "ok"
 
 
 async def test_global_brake(orders_on, monkeypatch: pytest.MonkeyPatch) -> None:

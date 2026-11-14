@@ -6,9 +6,9 @@ Never raises. Outcomes (``status``):
   needs_verification    no email or postcode given — Shopify is not called
   not_found             no such order, OR the details don't match (same answer,
                         so a wrong email can't confirm that an order exists)
-  too_many_attempts     too many failed checks for this order number (or overall)
-                        recently — a brake on guessing; applies whether or not
-                        the order exists, so it reveals nothing
+  too_many_attempts     too many failed POSTCODE checks for this order number (or
+                        overall) recently and no email given — a brake on guessing;
+                        applies whether or not the order exists. Email checks still run.
   unavailable           Shopify failed
   ok                    ``order`` holds the status-only view (no personal data)
 """
@@ -131,10 +131,15 @@ async def get_order_status(
     if not ((email or "").strip() or (postcode or "").strip()):
         return _result("needs_verification")
 
+    # Only postcode checks are guessable (a few thousand values), so only postcode
+    # misses count. Once an order is braked, the postcode is ignored and only the
+    # email can prove ownership — a stranger can't lock the real owner out.
     now = time.monotonic()
     if _blocked(number, now):
-        log.warning("order #%s: too many failed checks — refusing for now", number)
-        return _result("too_many_attempts")
+        if not (email or "").strip():
+            log.warning("order #%s: too many failed postcode checks — refusing for now", number)
+            return _result("too_many_attempts")
+        postcode = None
 
     try:
         raw = await get_client().find_order(number)
@@ -144,7 +149,8 @@ async def get_order_status(
         return _result("unavailable")
 
     if raw is None or not verify_caller(raw, email=email, postcode=postcode):
-        _record_failure(number, now)
+        if (postcode or "").strip():
+            _record_failure(number, now)
         log.info("order #%s: not found or caller details did not match", number)
         return _result("not_found")
     return _result("ok", map_order(raw))

@@ -155,8 +155,12 @@ declare module 'fastify' {
 }
 
 const DEFAULT_TIMEOUT_MS = 25_000;
-/** Live voice calls can't wait long — on timeout these tools degrade to enabled:false. */
-const LIVE_TOOL_TIMEOUT_MS = 5_000;
+/**
+ * Live voice calls can't wait long — on timeout these tools degrade to enabled:false.
+ * 8 s (was 5 s): a cold Vercel Python start after idle took ~5.9 s and degraded 4–9
+ * of 20 burst requests in QA 2026-11-14; warm calls take 0.2–1 s. Vapi's tool limit is 20 s.
+ */
+const LIVE_TOOL_TIMEOUT_MS = 8_000;
 
 async function postJson<T>(
   url: string,

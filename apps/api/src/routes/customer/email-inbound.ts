@@ -29,6 +29,7 @@ import type { FastifyBaseLogger, FastifyInstance, FastifyPluginAsync } from 'fas
 import { z } from 'zod';
 
 import type { ClaimRow, CustomerRow, DraftRow } from '../../types/domain.js';
+import { escapeLike } from '../../lib/like.js';
 
 // Accept both shorthand (`from`, `to`) and the DB-aligned (`from_addr`,
 // `to_addr`) forms.
@@ -164,7 +165,7 @@ async function resolveCustomer(
   const { data: bySender } = await app.supabase
     .from('customers')
     .select('id')
-    .ilike('email', input.from)
+    .ilike('email', escapeLike(input.from))
     .limit(1)
     .maybeSingle();
   if (bySender) {
@@ -177,7 +178,7 @@ async function resolveCustomer(
     const { data } = await app.supabase
       .from('customers')
       .select('id')
-      .ilike('email', alt)
+      .ilike('email', escapeLike(alt))
       .limit(1)
       .maybeSingle();
     if (data) {
@@ -192,7 +193,7 @@ async function resolveCustomer(
     const { data } = await app.supabase
       .from('customers')
       .select('id')
-      .ilike('name', nameFromBody)
+      .ilike('name', escapeLike(nameFromBody))
       .limit(1)
       .maybeSingle();
     if (data) {

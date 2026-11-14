@@ -450,3 +450,24 @@ def test_endpoint_rejects_empty_query() -> None:
     with TestClient(app) as c:
         r = c.post("/tools/search_products", json={"query": ""})
     assert r.status_code == 422
+
+
+# ---- QA 2026-11-14 regressions --------------------------------------------- #
+
+
+def test_decimal_thickness_stays_one_keyword() -> None:
+    """'13.5' was split into '13' + '5', so the exact paddle came back as a closest match."""
+    assert extract_keywords("hyperion cas 13.5") == ["hyperion", "cas", "13.5"]
+    assert extract_keywords("hyperion 14.5 mm") == ["hyperion", "14.5mm"]
+    assert extract_keywords("is it 16mm.") == ["16mm"]  # sentence full stop still removed
+    assert title_query(["13.5"]) == "title:13.5*"
+
+
+def test_url_falls_back_to_product_handle_when_not_on_online_store() -> None:
+    """Sandbox products have onlineStoreUrl=null; build the link from the handle."""
+    raw = {**_node("JOOLA Kosmos Pro V"), "onlineStoreUrl": None}
+    assert map_product(raw, store="test-store.myshopify.com")["url"] == (
+        "https://test-store.myshopify.com/products/joola-kosmos-pro-v"
+    )
+    assert map_product({**raw, "handle": None}, store="test-store.myshopify.com")["url"] is None
+    assert map_product(_node("Net"))["url"] == "https://joola.com/products/net"
