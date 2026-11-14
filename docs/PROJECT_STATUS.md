@@ -1,6 +1,6 @@
 # Project Status & Handoff — JOOLA CS AI Agent Team
 
-**Last updated:** 2026-11-14 · **Owner:** grout@joola.com · **Branch:** `feat/cs-memory` (not yet pushed)
+**Last updated:** 2026-11-14 · **Owner:** grout@joola.com · **Branch:** `main` (= `feat/cs-memory`, pushed 2026-11-14)
 
 Read this first when you come back to the project or switch accounts. It records
 what exists, what is live, what is pending, and every decision made so far.
@@ -63,10 +63,11 @@ warranty-policy 90 pass, TypeScript clean in all apps, API build OK; retrieval
 |---|---|
 | `kb_chunks` table + 214 chunks in production Supabase | ✅ live (additive, nothing existing changed) |
 | Vapi assistant has `search_knowledge` + `search_products` | ✅ live (same assistant id; backups in `apps/vapi-setup/backups/`, git-ignored) |
-| Vapi `search_products` **updated description** (closest-match wording) | ❌ in repo only — re-push pending |
-| Code on GitHub | ❌ committed locally, **not pushed** |
-| Vercel (API + ai-agents) | ❌ still old code; new env vars not set |
-| Vapi webhook → Vercel | ❌ still → ngrok (calls go to the laptop; fail if it sleeps) |
+| Vapi `search_products` **updated description** (closest-match wording) | ❌ in repo only — re-push pending (go-live step 6) |
+| Code on GitHub | ✅ pushed; `main` fast-forwarded to `57d5f8f` |
+| Vercel (API + ai-agents) | ✅ deployed `57d5f8f` with `KNOWLEDGE_SOURCE=vector`, `CATALOG_SOURCE=shopify`, Shopify vars, new prod `AI_AGENTS_SECRET` (both projects, production+preview). `/health` OK; memory + catalogue answer via `https://joola-cs-api.vercel.app/api/tools/*`; direct ai-agents call without secret → 401; 20 concurrent lookups 0.35–0.55 s warm (first burst after a deploy can degrade to `enabled:false` on cold start) |
+| Vercel (dashboard + customer-demo) | unchanged by this work — Vercel skipped their builds (no changes in their folders); previous deploys keep serving |
+| Vapi webhook → Vercel | ❌ still → ngrok (calls go to the laptop; fail if it sleeps). Correct target: `https://joola-cs-api.vercel.app/webhooks/vapi` (verified: path exists, webhook secret on Vercel = local) |
 | Local `.env.local` | memory ON, catalogue ON, local `AI_AGENTS_SECRET` set, `PYTHON_AI_URL=http://127.0.0.1:8000` |
 
 ## 5. Go-live checklist (in order)
