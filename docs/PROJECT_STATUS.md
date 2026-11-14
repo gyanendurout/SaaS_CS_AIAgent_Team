@@ -45,7 +45,7 @@ the "Infinity" connector, gap logging.
 | `49d4411` | Shared knowledge memory (pgvector), live Shopify catalogue, `search_knowledge` + `search_products` voice tools, `vapi:add-tool` script, runbook |
 | `f61e83e` | QA pass: voice-phrasing fixes, connection pooling, timeouts, `AI_AGENTS_SECRET`, `/health` switches, QA report |
 | `57d5f8f`…`020268e` | docs: handoff, go-live state, Vercel preview env fix, Vapi webhook → Vercel (all pushed, `main` = `020268e`) |
-| `2d85522` + docs commit | fix: JOOLA pronounced "YOO-la" on calls (Vapi part live) + misheard-brand mapping in searches — **local, not yet pushed** |
+| `2d85522` + `045f9fb` | fix: JOOLA pronounced "YOO-la" on calls (Vapi part live) + misheard-brand mapping in searches — pushed to `main`, ai-agents + api redeployed READY |
 
 **Behaviour switches (all default OFF = original behaviour):**
 
