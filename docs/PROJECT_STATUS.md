@@ -1,6 +1,6 @@
 # Project Status & Handoff — JOOLA CS AI Agent Team
 
-**Last updated:** 2026-11-14 · **Owner:** grout@joola.com · **Branch:** `main` (= `feat/cs-memory`, pushed 2026-11-14)
+**Last updated:** 2026-11-14 (late) · **Owner:** grout@joola.com · **Branch:** `main` (= `feat/cs-memory`, pushed 2026-11-14)
 
 Read this first when you come back to the project or switch accounts. It records
 what exists, what is live, what is pending, and every decision made so far.
@@ -44,6 +44,8 @@ the "Infinity" connector, gap logging.
 |---|---|
 | `49d4411` | Shared knowledge memory (pgvector), live Shopify catalogue, `search_knowledge` + `search_products` voice tools, `vapi:add-tool` script, runbook |
 | `f61e83e` | QA pass: voice-phrasing fixes, connection pooling, timeouts, `AI_AGENTS_SECRET`, `/health` switches, QA report |
+| `57d5f8f`…`020268e` | docs: handoff, go-live state, Vercel preview env fix, Vapi webhook → Vercel (all pushed, `main` = `020268e`) |
+| `2d85522` + docs commit | fix: JOOLA pronounced "YOO-la" on calls (Vapi part live) + misheard-brand mapping in searches — **local, not yet pushed** |
 
 **Behaviour switches (all default OFF = original behaviour):**
 

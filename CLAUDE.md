@@ -12,6 +12,7 @@ steps, open decisions, roadmap). How to run/deploy: [docs/CS_MEMORY_RUNBOOK.md](
   without checking.
 - **Never run `pnpm vapi:recreate:apply`** — it deletes the Vapi assistant and changes its id.
   Use `pnpm vapi:add-tool` / `vapi:update-webhook` (dry run first, then `:apply`).
+- The brand is **JOOLA**, pronounced "YOO-la" (never "Julia"). Voice fix: `pnpm vapi:fix-brand-voice`.
 - Do not touch the `natt_events*` RDS databases — they belong to a different project.
 - Changes to the live Vapi assistant, Vercel, or git push need the owner's explicit OK.
 
@@ -36,5 +37,8 @@ steps, open decisions, roadmap). How to run/deploy: [docs/CS_MEMORY_RUNBOOK.md](
   TypeScript: `npx tsc --noEmit` per app. Warranty rules: `packages/warranty-policy` pytest.
 - Local: run ai-agents on `127.0.0.1` and set `PYTHON_AI_URL=http://127.0.0.1:8000` (Windows
   `localhost` adds ~2 s per call); restart uvicorn after pulling (`--reload` misses changes on Windows).
-- Commits: conventional (`feat:`, `fix:`, `docs:` …). Update `docs/PROJECT_STATUS.md` §3–§4 and
-  its "Last updated" line at the end of each work session.
+- Commits: conventional (`feat:`, `fix:`, `docs:` …).
+- **Owner's standing rule — keep docs and memory current after every change:** update
+  `docs/PROJECT_STATUS.md` (§3–§4, "Last updated"), the runbook section for anything operational,
+  and this file for new rules; then refresh the knowledge graph with `graphify update .`
+  (output `graphify-out/`, git-ignored).

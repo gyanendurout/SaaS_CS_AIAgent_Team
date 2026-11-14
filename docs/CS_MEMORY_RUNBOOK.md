@@ -162,6 +162,12 @@ Vapi can only reach your machine through a public tunnel.
 
 ## 6. Run in the cloud (Vercel)
 
+> **Live since 2026-11-14.** Vercel projects (all auto-deploy from GitHub `main`):
+> `joola-cs-api` → https://joola-cs-api.vercel.app · `joola-cs-ai-agents` → https://joola-cs-ai-agents.vercel.app ·
+> `joola-cs-dashboard` · `joola-cs-customer-demo` → https://joola-cs-customer-demo.vercel.app.
+> Vapi webhook = `https://joola-cs-api.vercel.app/webhooks/vapi` (include the path — the script uses the URL verbatim).
+> Dashboard / customer-demo builds show **CANCELED** when their folders didn't change (turbo-ignore) — expected.
+
 1. Merge to `main` (production auto-deploy) or push a branch (preview deploy).
 2. Vercel → **ai-agents** project → Settings → Environment Variables (for the
    environment you deploy, Production and/or Preview):
@@ -232,6 +238,9 @@ Notes:
 | `error: upstream_unavailable` | API can't reach ai-agents — check `PYTHON_AI_URL` and that ai-agents is up |
 | Call never uses memory | assistant lacks the tool (`pnpm vapi:inspect`), or the webhook points elsewhere (`serverUrl`) |
 | Call reaches laptop instead of Vercel | webhook still on ngrok — run `vapi:update-webhook:apply` with the Vercel URL |
+| Voice says "Julia" instead of JOOLA | pronunciation fix missing on the assistant — `cd apps/vapi-setup && pnpm vapi:fix-brand-voice` (dry run) → `:apply` (see section 12) |
+| Dashboard **preview** build fails "Missing Supabase env vars" | `NEXT_PUBLIC_SUPABASE_*` set for Production only — add the Preview target (fixed 2026-11-14) |
+| Ad-hoc Python call to the Vapi API returns 403 | Cloudflare rejects the default Python client — set a generic client name header (the pnpm scripts are fine) |
 | Ingest error `relation "kb_chunks" does not exist` | migration not applied to this Supabase project |
 | Ingest error `no knowledge chunks found` | run from `apps/ai-agents`; `knowledge/` missing or empty |
 
@@ -277,3 +286,17 @@ needs the Shopify Admin API), using stock inside email/web drafts.
 - Some knowledge answers contain past dates ("late 2024") — needs CS content review.
 - `joola_internal_policies.md` from the chatbot was deliberately **not** imported
   (looks like test content) until CS confirms it is real policy.
+
+## 12. Brand pronunciation (JOOLA = "YOO-la")
+
+The OpenAI `alloy` voice read "JOOLA" as "Julia", and Deepgram wrote callers' "JOOLA" as Julia/Jula.
+Fix (live 2026-11-14, repeatable and idempotent):
+
+- `cd apps/vapi-setup && pnpm vapi:fix-brand-voice` (dry run) → `pnpm vapi:fix-brand-voice:apply`.
+  Adds a spoken-only text replacement JOOLA/Joola/joola → "Yoola" (`voice.chunkPlan.formatPlan.replacements`),
+  Deepgram `transcriber.keyterm: ["JOOLA"]`, and a `## BRAND NAME` note in the live system prompt.
+  Backs up voice/transcriber/model to `backups/<ts>-brand-voice.json`; restore by PATCHing those three fields back.
+- ai-agents `app/brand.py` `normalize_brand()` maps Julia/Jula/Yola/Yoola/Jolla → JOOLA in
+  `search_knowledge` and `search_products` queries (stored data is not changed).
+- To change the spoken form, edit `SPOKEN_BRAND` in `src/fix-brand-voice.ts` and re-apply.
+
