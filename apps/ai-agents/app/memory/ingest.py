@@ -83,11 +83,13 @@ def ingest(
 
 def main() -> None:
     from app.config import get_settings
-    from app.memory.service import embed_texts, get_store
+    from app.memory.service import embed_texts, get_ingest_store
 
     logging.basicConfig(level="INFO", format="%(levelname)s %(message)s")
     files = default_sources()
-    stats = ingest(files, store=get_store(), embed=embed_texts, model=get_settings().embedding_model)
+    stats = ingest(
+        files, store=get_ingest_store(), embed=embed_texts, model=get_settings().embedding_model
+    )
     log.info("ingested %d files: %s", len(files), stats)
 
 

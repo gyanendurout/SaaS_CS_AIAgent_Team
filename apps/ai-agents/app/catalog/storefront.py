@@ -49,11 +49,25 @@ _STOP_WORDS_TEXT = """
     perfect right suitable suited recommend recommended recommendation suggest favourite
     favorite popular quality worth stock available availability price prices priced cost
     costs sell selling sold buy still left currently right now today we us our carry
+    joola
 """
+# "joola" is a stop word because every product is JOOLA's but ~30% of titles
+# (all iPONG items, some Ben Johns paddles, add-ons) don't contain the word.
 STOP_WORDS = frozenset(_STOP_WORDS_TEXT.split())
 
 _PRO_NUMBERS = {"1": "i", "one": "i", "2": "ii", "two": "ii", "3": "iii", "three": "iii",
-                "4": "iv", "four": "iv", "5": "v", "five": "v"}
+                "4": "iv", "four": "iv", "5": "v", "five": "v", "vee": "v"}
+
+# Titles write thickness as one token (10mm 12mm 14mm 16mm 18mm 25mm); speech-to-text
+# gives "16 mm", "16 millimeter", "sixteen millimeters".
+_NUMBER_WORDS = {"ten": "10", "eleven": "11", "twelve": "12", "thirteen": "13",
+                 "fourteen": "14", "fifteen": "15", "sixteen": "16", "seventeen": "17",
+                 "eighteen": "18", "twenty five": "25", "twenty": "20"}
+_UNIT = r"(?:mm|millimet(?:er|re)s?)\b"
+_SPOKEN_NUMBER = re.compile(
+    r"\b(" + "|".join(sorted(_NUMBER_WORDS, key=len, reverse=True)) + r")\s+(?=" + _UNIT + ")"
+)
+_THICKNESS = re.compile(r"\b(\d+)\s*" + _UNIT)
 _PUNCT = re.compile(r"[^\w\s]")
 # Straight and curly (U+2019) apostrophes: "joola's" -> "joola", "don't" -> "dont",
 # so a possessive never becomes a stray "s"/"t" keyword.
@@ -70,8 +84,11 @@ MIN_DISCOUNT_RATIO = 0.01
 def extract_keywords(query: str) -> list[str]:
     """Lower-case product words; spoken 'pro five' becomes 'pro v'. Deduplicated, capped."""
     text = _APOSTROPHE.sub("", _POSSESSIVE.sub("", query.lower()))
+    text = _PUNCT.sub(" ", text)
+    text = _SPOKEN_NUMBER.sub(lambda m: _NUMBER_WORDS[m.group(1)] + " ", text)
+    text = _THICKNESS.sub(r"\1mm", text)
     out: list[str] = []
-    for word in _PUNCT.sub(" ", text).split():
+    for word in text.split():
         if out and out[-1] == "pro" and word in _PRO_NUMBERS:
             word = _PRO_NUMBERS[word]
         elif word in STOP_WORDS:
@@ -122,6 +139,7 @@ def map_product(raw: dict[str, Any]) -> dict[str, Any]:
         "on_sale": _on_sale(headline["price"], headline["compare_at_price"]),
         "available": bool(available),
         "variants": variants,
+        "closest_match": False,
     }
 
 
@@ -145,8 +163,47 @@ class StorefrontClient:
         self._retry_delay = retry_delay
         self._deadline = deadline
         self._transport = transport
+        self._http: httpx.AsyncClient | None = None
+        self._http_loop: asyncio.AbstractEventLoop | None = None
+
+    def _client(self) -> httpx.AsyncClient:
+        """One pooled keep-alive client per event loop (as the chatbot did).
+
+        A new client per lookup meant a new TLS handshake each time; QA measured
+        20 concurrent lookups at ~4.3 s that way vs ~0.2 s with a shared pool.
+        """
+        loop = asyncio.get_running_loop()
+        if self._http is None or self._http.is_closed or self._http_loop is not loop:
+            self._http = httpx.AsyncClient(
+                timeout=self._timeout,
+                headers=self._headers,
+                transport=self._transport,
+                limits=httpx.Limits(max_connections=20, max_keepalive_connections=10),
+            )
+            self._http_loop = loop
+        return self._http
+
+    async def aclose(self) -> None:
+        if self._http is not None and not self._http.is_closed:
+            await self._http.aclose()
 
     async def search(self, keywords: list[str], limit: int) -> list[dict[str, Any]]:
+        """Exact (all words) first; if 3+ words find nothing, retry once without the
+        last word to offer the closest product. One deadline covers everything, so
+        retries and the fallback never outlive the API's 5 s cap on live calls."""
+        async with asyncio.timeout(self._deadline):
+            results = await self._search_once(keywords, limit)
+            if not results and len(keywords) >= 3:
+                relaxed = await self._search_once(keywords[:-1], limit)
+                if relaxed:
+                    log.info("no exact product for %s; offering closest match without %r",
+                             keywords, keywords[-1])
+                # The dropped word may be the one that tells models apart (e.g. "iii"),
+                # so the assistant must not quote these as the product asked for.
+                results = [{**p, "closest_match": True} for p in relaxed]
+            return results
+
+    async def _search_once(self, keywords: list[str], limit: int) -> list[dict[str, Any]]:
         # Over-fetch so exclusions and duplicate titles don't leave us short.
         data = await self._graphql({"q": title_query(keywords), "first": min(limit * 3, 30)})
         results: list[dict[str, Any]] = []
@@ -164,26 +221,23 @@ class StorefrontClient:
         return results
 
     async def _graphql(self, variables: dict[str, Any]) -> dict[str, Any]:
-        # One overall budget for all attempts, so retries never outlive the API's 5 s cap.
-        async with asyncio.timeout(self._deadline):
-            for attempt in range(1, self._attempts + 1):
-                try:
-                    return await self._graphql_once(variables)
-                except (RuntimeError, httpx.TransportError) as error:
-                    transient = isinstance(error, httpx.TransportError) or any(
-                        m in str(error).lower() for m in _TRANSIENT
-                    )
-                    if not transient or attempt == self._attempts:
-                        raise
-                    log.warning("Shopify query failed (attempt %d), retrying: %s", attempt, error)
-                    await asyncio.sleep(self._retry_delay * attempt)
+        for attempt in range(1, self._attempts + 1):
+            try:
+                return await self._graphql_once(variables)
+            except (RuntimeError, httpx.TransportError) as error:
+                transient = isinstance(error, httpx.TransportError) or any(
+                    m in str(error).lower() for m in _TRANSIENT
+                )
+                if not transient or attempt == self._attempts:
+                    raise
+                log.warning("Shopify query failed (attempt %d), retrying: %s", attempt, error)
+                await asyncio.sleep(self._retry_delay * attempt)
         raise AssertionError("unreachable")
 
     async def _graphql_once(self, variables: dict[str, Any]) -> dict[str, Any]:
-        async with httpx.AsyncClient(
-            timeout=self._timeout, headers=self._headers, transport=self._transport
-        ) as client:
-            response = await client.post(self._url, json={"query": PRODUCTS_QUERY, "variables": variables})
+        response = await self._client().post(
+            self._url, json={"query": PRODUCTS_QUERY, "variables": variables}
+        )
         if response.status_code in (429, 430) or response.status_code >= 500:
             raise RuntimeError(f"Shopify temporarily unavailable (HTTP {response.status_code})")
         response.raise_for_status()  # 4xx (bad token, bad query): not worth retrying

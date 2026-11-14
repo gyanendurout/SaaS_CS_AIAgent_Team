@@ -23,6 +23,7 @@ os.environ.setdefault("POLICY_VERSION", "1.0.0")
 # for manual testing) never changes test results. Tests opt in explicitly.
 os.environ["KNOWLEDGE_SOURCE"] = "static"
 os.environ["CATALOG_SOURCE"] = "off"
+os.environ["AI_AGENTS_SECRET"] = ""
 
 
 # --------------------------------------------------------------------------- #

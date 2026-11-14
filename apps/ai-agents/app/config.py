@@ -59,6 +59,12 @@ class Settings(BaseSettings):
     shopify_storefront_token: str = Field(default="", description="Storefront API access token")
     shopify_api_version: str = Field(default="2026-07", description="Storefront API version")
 
+    ai_agents_secret: str = Field(
+        default="",
+        description="Shared secret the API sends as X-Internal-Secret. When set, the paid "
+        "tool endpoints (search_knowledge, search_products) reject calls without it.",
+    )
+
     @field_validator("catalog_source", mode="before")
     @classmethod
     def _lenient_catalog_source(cls, value: object) -> str:

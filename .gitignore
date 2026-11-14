@@ -2,6 +2,8 @@
 # Reference-only checkouts — NEVER commit (separate repo, contains a real .env)
 # ============================================================================
 /Shopify-Chatbot/
+# Local knowledge-graph output (also indexes the reference checkout above)
+/graphify-out/
 
 # ============================================================================
 # Dependencies
@@ -48,6 +50,8 @@ apps/vapi-setup/backups/
 # Testing / coverage
 # ============================================================================
 coverage/
+.coverage
+.coverage.*
 .nyc_output/
 *.lcov
 .pytest_cache/

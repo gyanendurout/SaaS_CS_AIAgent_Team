@@ -277,6 +277,43 @@ async def test_search_never_raises_when_backend_fails(
     assert await service.search_knowledge("return policy") == []
 
 
+async def test_search_gives_up_when_database_is_slow(
+    vector_mode: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A hung Supabase call must not stall a reply: overall budget, then no memory."""
+    import time
+
+    class SlowStore(FakeStore):
+        def match(self, embedding: list[float], k: int, min_score: float) -> list[dict[str, Any]]:
+            time.sleep(1.0)
+            return [{"source": "s", "heading": "h", "content": "c", "score": 0.9}]
+
+    monkeypatch.setattr(service, "get_store", lambda: SlowStore())
+    monkeypatch.setattr(service, "embed_query", lambda q: [1.0])
+    monkeypatch.setattr(service, "SEARCH_BUDGET_S", 0.2)
+    start = time.perf_counter()
+    assert await service.search_knowledge("return policy") == []
+    assert time.perf_counter() - start < 0.8
+
+
+def test_search_uses_its_own_db_client_with_hard_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The asyncio budget can't stop a worker thread; the HTTP timeout must."""
+    seen: dict[str, Any] = {}
+
+    def fake_create_client(url: str, key: str, options: Any = None) -> object:
+        seen["timeout"] = getattr(options, "postgrest_client_timeout", None)
+        return object()
+
+    monkeypatch.setattr(service, "create_client", fake_create_client)
+    service.get_memory_supabase.cache_clear()
+    try:
+        service.get_store()
+        assert seen["timeout"] == service.DB_TIMEOUT_S
+        assert service.DB_TIMEOUT_S < service.SEARCH_BUDGET_S
+    finally:
+        service.get_memory_supabase.cache_clear()
+
+
 async def test_search_skips_blank_query(vector_mode: None, monkeypatch: pytest.MonkeyPatch) -> None:
     store = FakeStore()
     monkeypatch.setattr(service, "get_store", lambda: store)
@@ -309,6 +346,21 @@ def test_ingest_adds_then_is_idempotent(tmp_path: Path) -> None:
 
     second = ingest([f], store=store, embed=fake_embed, model="m", root=tmp_path)
     assert second == {"added": 0, "removed": 0, "unchanged": 3}
+
+
+def test_default_sources_are_the_reviewed_knowledge_files() -> None:
+    """Guards what callers can hear: only reviewed files are ingested."""
+    from app.memory.ingest import REPO_ROOT, default_sources
+
+    names = sorted(p.relative_to(REPO_ROOT).as_posix() for p in default_sources())
+    assert names == [
+        "docs/policies/cs-knowledge-base-v1.md",
+        "knowledge/shopify/cs_product_guidance.md",
+        "knowledge/shopify/cs_shipping_and_returns.md",
+        "knowledge/shopify/paddle_registration.md",
+    ]
+    # Pending CS confirmation that it is real policy (trade-in credit, demo deposit).
+    assert not any("internal_policies" in n for n in names)
 
 
 def test_ingest_refuses_empty_sources_instead_of_wiping_table(tmp_path: Path) -> None:

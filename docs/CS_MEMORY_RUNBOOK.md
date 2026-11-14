@@ -4,6 +4,7 @@ How to run, test, update and roll back the shared knowledge memory that the
 voice agent, email, web form and post-call drafts use.
 
 Design and decisions: [plans/2026-11-14-cs-memory.md](plans/2026-11-14-cs-memory.md).
+QA results: [qa/2026-11-14-cs-memory-catalog-qa.md](qa/2026-11-14-cs-memory-catalog-qa.md).
 
 ---
 
@@ -57,10 +58,18 @@ Email / web form / post-call ─▶ ai-agents pipeline (response agent) ──�
 | `CATALOG_SOURCE` + `SHOPIFY_*` | ai-agents | live product catalogue, see section 10 |
 | `EMBEDDING_MODEL` | ai-agents | optional, default `text-embedding-3-small` (must stay 1536-dim) |
 | `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `OPENAI_API_KEY` | ai-agents | already required by the app |
-| `PYTHON_AI_URL` | API | URL of ai-agents (`http://localhost:8000` locally) |
+| `PYTHON_AI_URL` | API | URL of ai-agents (`http://127.0.0.1:8000` locally — not `localhost`, see 5.1) |
 | `PUBLIC_BACKEND_URL` | repo-root `.env.local`, used by `apps/vapi-setup` | public API URL Vapi should call (ngrok locally, Vercel API in cloud) |
+| `AI_AGENTS_SECRET` | **both** API and ai-agents, same value | shared secret (X-Internal-Secret). When set on ai-agents, `search_knowledge` / `search_products` reject callers without it. Generate: `python -c "import secrets; print(secrets.token_urlsafe(32))"` |
 
 Never commit `.env.local`. Only `.env.example` files are tracked.
+
+**Verify a deployment without a call:** `GET <ai-agents>/health` returns
+`knowledge_source`, `catalog_enabled` and `internal_auth` (true/false only, never values).
+
+**Rolling out `AI_AGENTS_SECRET`:** set it on the **API first**, redeploy, then on
+ai-agents and redeploy. If only ai-agents has it, the two voice tools return
+`enabled:false` (safe) — claims, pipeline and order lookups are never affected.
 
 ---
 
@@ -83,8 +92,10 @@ Never commit `.env.local`. Only `.env.example` files are tracked.
 
 ```bash
 # ai-agents  → http://localhost:8000   (docs: /docs)
-cd apps/ai-agents && .venv/Scripts/python -m uvicorn app.main:app --port 8000 --reload
-#   macOS/Linux: .venv/bin/python …   or: uv run uvicorn app.main:app --port 8000 --reload
+cd apps/ai-agents && .venv/Scripts/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
+#   macOS/Linux: .venv/bin/python …   or: uv run uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
+#   Use PYTHON_AI_URL=http://127.0.0.1:8000 (not "localhost"): on Windows "localhost"
+#   tries IPv6 first and QA measured +2.2 s on every API -> ai-agents call.
 
 # API        → http://localhost:3001
 cd apps/api && pnpm dev
@@ -99,7 +110,8 @@ cd apps/customer-demo && pnpm dev
 ### 5.2 Turn memory on/off
 
 Add or edit in the **repo-root** `.env.local`, then **restart ai-agents**
-(`--reload` watches code, not env files):
+(`--reload` watches code, not env files — and on Windows it can also miss code
+changes; QA hit this, so restart after pulling):
 
 ```bash
 KNOWLEDGE_SOURCE=vector   # on
@@ -151,9 +163,13 @@ Vapi can only reach your machine through a public tunnel.
 ## 6. Run in the cloud (Vercel)
 
 1. Merge to `main` (production auto-deploy) or push a branch (preview deploy).
-2. Vercel → **ai-agents** project → Settings → Environment Variables:
-   `KNOWLEDGE_SOURCE = vector` for the environment you deploy (Production and/or
-   Preview). **Redeploy** — env changes apply only to new deployments.
+2. Vercel → **ai-agents** project → Settings → Environment Variables (for the
+   environment you deploy, Production and/or Preview):
+   `KNOWLEDGE_SOURCE=vector`, `CATALOG_SOURCE=shopify`, `SHOPIFY_STORE`,
+   `SHOPIFY_STOREFRONT_TOKEN`, `AI_AGENTS_SECRET`.
+   Vercel → **API** project: `AI_AGENTS_SECRET` (same value).
+   **Redeploy both** — env changes apply only to new deployments. Check
+   `<ai-agents>/health`: `knowledge_source: vector`, `catalog_enabled: true`, `internal_auth: true`.
 3. Point Vapi at the Vercel API: set `PUBLIC_BACKEND_URL=https://<api>.vercel.app`
    in `.env.local`, then `pnpm vapi:update-webhook` → `pnpm vapi:update-webhook:apply`.
 4. Make sure the assistant has the `search_knowledge` tool (`pnpm vapi:inspect`; add with 5.4 step 3 if missing).
@@ -209,6 +225,9 @@ Notes:
 | Symptom | Cause / fix |
 |---|---|
 | `enabled:false` | `KNOWLEDGE_SOURCE` not `vector`, or ai-agents not restarted / redeployed |
+| `enabled:false` + `error: upstream_unavailable`, ai-agents logs 401 | `AI_AGENTS_SECRET` differs between API and ai-agents (or set on only one) — check `/health` → `internal_auth` |
+| Code change not visible locally | uvicorn `--reload` missed it (Windows) — restart ai-agents |
+| Every local tool call ~2 s slower than expected | `PYTHON_AI_URL` uses `localhost` (IPv6 tried first on Windows) — use `127.0.0.1` and restart the API |
 | `enabled:true` but `results: []` | question not covered (match threshold 0.3), or knowledge not ingested — check `select count(*) from kb_chunks` |
 | `error: upstream_unavailable` | API can't reach ai-agents — check `PYTHON_AI_URL` and that ai-agents is up |
 | Call never uses memory | assistant lacks the tool (`pnpm vapi:inspect`), or the webhook points elsewhere (`serverUrl`) |
@@ -232,9 +251,13 @@ used by the voice tool `search_products`. Plan: [plans/2026-11-14-shopify-catalo
 Check: `curl -X POST localhost:3001/api/tools/search_products -H 'content-type: application/json' -d '{"query":"kosmos pro v"}'`
 
 Behaviour: every product word must appear in the title (so "pro v" finds only Pro V
-paddles); filler words ("is", "in stock", "price") are dropped; spoken "pro five/four"
-becomes "Pro V/IV"; test/GovX/sample products are hidden. If Shopify fails or the
-switch is off the tool returns `enabled:false` and the assistant offers an email follow-up.
+paddles); filler words ("is", "in stock", "price") and the brand word "JOOLA" (missing
+from ~30% of titles, e.g. iPONG) are dropped; spoken "pro five/four/vee" becomes
+"Pro V/IV"; "16 mm" / "sixteen millimeter" becomes `16mm`; if 3+ words find nothing it
+retries once without the last word and the assistant offers it as the closest match;
+test/GovX/sample products are hidden. One pooled connection per process (20
+concurrent lookups ≈ 0.6 s). If Shopify fails or the switch is off the tool returns
+`enabled:false` and the assistant offers an email follow-up.
 
 Cloud: add `CATALOG_SOURCE=shopify`, `SHOPIFY_STORE`, `SHOPIFY_STOREFRONT_TOKEN` to the
 Vercel **ai-agents** project and redeploy.
@@ -249,8 +272,8 @@ needs the Shopify Admin API), using stock inside email/web drafts.
   (separate Bitbucket repo with a real `.env`) and must never be committed.
 
 - Non-warranty emails still get the standard acknowledgement (no AI, no memory).
-- ai-agents endpoints have no auth (existing pattern); each memory search costs a
-  small OpenAI embedding — keep the ai-agents URL private or add a shared secret.
+- Only the two paid tool endpoints are protected by `AI_AGENTS_SECRET`; the older
+  ai-agents endpoints (pipeline, claims) are still open — keep the ai-agents URL private.
 - Some knowledge answers contain past dates ("late 2024") — needs CS content review.
 - `joola_internal_policies.md` from the chatbot was deliberately **not** imported
   (looks like test content) until CS confirms it is real policy.

@@ -2,7 +2,7 @@
   "type": "function",
   "function": {
     "name": "search_products",
-    "description": "Look up a specific JOOLA product in the live store: current price, sale price (compare_at_price when on_sale is true), whether it is in stock, stock per variant (size/thickness/color) and the product link. Use when the customer names or describes a product and asks about price, availability, stock, or a replacement. Works best with product words only, e.g. 'perseus pro v 16mm', 'kosmos pro v', 'neoprene paddle cover', 'pickleball net'. Not for order status (use lookup_order) and not for browsing all sale items. Returns { enabled, results }. If enabled is false or results is empty, say you can't check live stock right now and offer to have the team follow up by email.",
+    "description": "Look up a specific JOOLA product in the live store: current price, sale price (compare_at_price when on_sale is true), whether it is in stock, stock per variant (size/thickness/color) and the product link. Use when the customer names or describes a product and asks about price, availability, stock, or a replacement. Works best with product words only, e.g. 'perseus pro v 16mm', 'kosmos pro v', 'neoprene paddle cover', 'pickleball net'. Not for order status (use lookup_order) and not for browsing all sale items. Returns { enabled, results }. If a result has closest_match true (or its title differs from what the customer named), say you don't see that exact product, offer it as the closest match and confirm before quoting a price or stock. If enabled is false or results is empty, say you can't check live stock right now and offer to have the team follow up by email.",
     "parameters": {
       "type": "object",
       "properties": {

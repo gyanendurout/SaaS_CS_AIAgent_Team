@@ -26,13 +26,19 @@ def catalog_enabled() -> bool:
     return s.catalog_source == "shopify" and bool(s.shopify_store and s.shopify_storefront_token)
 
 
+_client: StorefrontClient | None = None
+_client_key: tuple[str, str, str] | None = None
+
+
 def get_client() -> StorefrontClient:
+    """Process-wide client so its connection pool (keep-alive) is reused across lookups."""
+    global _client, _client_key
     s = get_settings()
-    return StorefrontClient(
-        store=s.shopify_store,
-        token=s.shopify_storefront_token,
-        api_version=s.shopify_api_version,
-    )
+    key = (s.shopify_store, s.shopify_storefront_token, s.shopify_api_version)
+    if _client is None or _client_key != key:
+        _client = StorefrontClient(store=key[0], token=key[1], api_version=key[2])
+        _client_key = key
+    return _client
 
 
 def clear_cache() -> None:

@@ -30,6 +30,9 @@ const EnvSchema = z.object({
 
   // Python AI agents
   PYTHON_AI_URL: z.string().url().default('http://localhost:8000'),
+  // Shared secret sent to ai-agents as X-Internal-Secret (must match its AI_AGENTS_SECRET).
+  // Optional: unset = no header, which ai-agents accepts while its own value is unset.
+  AI_AGENTS_SECRET: z.string().optional(),
 
   // Optional public URL for the API (ngrok in dev)
   PUBLIC_BACKEND_URL: z.string().url().optional(),

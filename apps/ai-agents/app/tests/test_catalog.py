@@ -107,8 +107,26 @@ def test_keywords_map_spoken_pro_numbers_to_roman() -> None:
     assert extract_keywords("Hyperion Pro 4 price") == ["hyperion", "pro", "iv"]
 
 
+def test_keywords_drop_brand_word_because_30pct_of_titles_lack_it() -> None:
+    # e.g. "iPONG V300 Table Tennis Training Robot" has no "JOOLA" in its title.
+    assert extract_keywords("Is the JOOLA iPong V300 in stock?") == ["ipong", "v300"]
+
+
+def test_keywords_join_spoken_thickness_into_title_token() -> None:
+    # Titles always write thickness as one token: 14mm, 16mm, ...
+    assert extract_keywords("perseus 16 mm") == ["perseus", "16mm"]
+    assert extract_keywords("Perseus 16 millimeter") == ["perseus", "16mm"]
+    assert extract_keywords("Do you have the Perseus sixteen millimeter?") == ["perseus", "16mm"]
+    assert extract_keywords("the scorpeus fourteen millimetres") == ["scorpeus", "14mm"]
+    assert extract_keywords("perseus 16mm") == ["perseus", "16mm"]
+
+
+def test_keywords_map_spoken_letter_vee_after_pro() -> None:
+    assert extract_keywords("kosmos pro vee") == ["kosmos", "pro", "v"]
+
+
 def test_keywords_handle_apostrophes_and_possessives() -> None:
-    assert extract_keywords("What's the price of the JOOLA's Perseus?") == ["joola", "perseus"]
+    assert extract_keywords("What's the price of the Hyperion's grip?") == ["hyperion", "grip"]
     assert extract_keywords("I don’t see the Kosmos") == ["dont", "kosmos"]  # noqa: RUF001
 
 
@@ -181,10 +199,96 @@ async def test_client_sends_title_query_and_token() -> None:
 
     results = await _client(handler).search(["perseus", "16mm"], limit=3)
     assert [r["title"] for r in results] == ["JOOLA Perseus 16mm"]
+    assert results[0]["closest_match"] is False
     assert seen["url"] == "https://test-store.myshopify.com/api/2026-07/graphql.json"
     assert seen["token"] == "storefront-test-token"
     assert seen["body"]["variables"]["q"] == "title:perseus* AND title:16mm*"
     assert "sortKey: RELEVANCE" in seen["body"]["query"]
+
+
+async def test_client_relaxes_to_closest_match_when_exact_finds_nothing() -> None:
+    queries: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        q = json.loads(request.content)["variables"]["q"]
+        queries.append(q)
+        if "scorpeus" in q and "title:3*" not in q:
+            return _products_response([_node("JOOLA Collin Johns Scorpeus CFS 16")])
+        return _products_response([])
+
+    results = await _client(handler).search(["collin", "johns", "scorpeus", "3"], limit=3)
+    assert [r["title"] for r in results] == ["JOOLA Collin Johns Scorpeus CFS 16"]
+    # The assistant must not present a relaxed hit as the exact product asked for.
+    assert results[0]["closest_match"] is True
+    assert queries == [
+        "title:collin* AND title:johns* AND title:scorpeus* AND title:3*",
+        "title:collin* AND title:johns* AND title:scorpeus*",
+    ]
+
+
+async def test_one_deadline_covers_the_closest_match_retry() -> None:
+    import asyncio
+    import time
+
+    calls = {"n": 0}
+
+    async def handler(_r: httpx.Request) -> httpx.Response:
+        calls["n"] += 1
+        if calls["n"] > 1:
+            await asyncio.sleep(2)  # the fallback pass hangs
+        return _products_response([])
+
+    client = StorefrontClient(
+        store="s.myshopify.com", token="t", api_version="2026-07",
+        transport=httpx.MockTransport(handler), retry_delay=0, deadline=0.3,
+    )
+    start = time.perf_counter()
+    with pytest.raises(TimeoutError):
+        await client.search(["hyperion", "pro", "iii"], limit=3)
+    assert time.perf_counter() - start < 1.0
+
+
+def test_thickness_normalisation_has_no_false_positives() -> None:
+    assert extract_keywords("ipong v300 robot") == ["ipong", "v300", "robot"]
+    assert extract_keywords("pack of 16 balls") == ["pack", "16", "balls"]
+    assert extract_keywords("hammer paddle") == ["hammer", "paddle"]
+
+
+async def test_client_does_not_relax_short_queries() -> None:
+    calls = {"n": 0}
+
+    def handler(_r: httpx.Request) -> httpx.Response:
+        calls["n"] += 1
+        return _products_response([])
+
+    assert await _client(handler).search(["gloves"], limit=3) == []
+    assert await _client(handler).search(["kosmos", "gloves"], limit=3) == []
+    assert calls["n"] == 2
+
+
+async def test_client_reuses_one_connection_pool_across_searches(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """New TLS connections per lookup serialised 20 concurrent calls to ~4 s (QA C5)."""
+    import app.catalog.storefront as sf
+
+    created = {"n": 0}
+    real = httpx.AsyncClient
+
+    class CountingClient(real):  # type: ignore[misc, valid-type]
+        def __init__(self, *a: Any, **kw: Any) -> None:
+            created["n"] += 1
+            super().__init__(*a, **kw)
+
+    monkeypatch.setattr(sf.httpx, "AsyncClient", CountingClient)
+    client = _client(lambda _r: _products_response([_node("JOOLA Kosmos Pro V")]))
+    for _ in range(3):
+        await client.search(["kosmos"], limit=1)
+    assert created["n"] == 1
+
+
+def test_service_reuses_the_same_client(catalog_on: None) -> None:
+    assert service.get_client() is service.get_client()
 
 
 async def test_client_retries_network_error() -> None:

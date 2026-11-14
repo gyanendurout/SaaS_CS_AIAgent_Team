@@ -19,17 +19,18 @@ import asyncio
 import logging
 from typing import Any
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
-from warranty_policy import ClaimInput, DecisionResult, evaluate
 
 from app.catalog.service import catalog_enabled, search_products
 from app.config import get_settings
+from app.deps import require_internal_secret
 from app.graph.build import get_compiled_graph
 from app.graph.state import PipelineState
 from app.memory.service import search_knowledge
 from app.services.audit import write_case_event
 from app.services.supabase_client import get_supabase
+from warranty_policy import ClaimInput, DecisionResult, evaluate
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/tools", tags=["tools"])
@@ -343,7 +344,11 @@ class SearchKnowledgeResponse(BaseModel):
     results: list[KnowledgeHit]
 
 
-@router.post("/search_knowledge", response_model=SearchKnowledgeResponse)
+@router.post(
+    "/search_knowledge",
+    response_model=SearchKnowledgeResponse,
+    dependencies=[Depends(require_internal_secret)],
+)
 async def search_knowledge_route(req: SearchKnowledgeRequest) -> SearchKnowledgeResponse:
     """``enabled=false`` while KNOWLEDGE_SOURCE=static — callers fall back to built-in knowledge."""
     enabled = get_settings().knowledge_source == "vector"
@@ -377,6 +382,7 @@ class Product(BaseModel):
     on_sale: bool
     available: bool
     variants: list[ProductVariant]
+    closest_match: bool = False
 
 
 class SearchProductsResponse(BaseModel):
@@ -384,7 +390,11 @@ class SearchProductsResponse(BaseModel):
     results: list[Product]
 
 
-@router.post("/search_products", response_model=SearchProductsResponse)
+@router.post(
+    "/search_products",
+    response_model=SearchProductsResponse,
+    dependencies=[Depends(require_internal_secret)],
+)
 async def search_products_route(req: SearchProductsRequest) -> SearchProductsResponse:
     """``enabled=false`` while CATALOG_SOURCE=off — callers answer without live stock/price."""
     enabled = catalog_enabled()

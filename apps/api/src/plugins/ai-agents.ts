@@ -84,6 +84,8 @@ export interface Product {
   on_sale: boolean;
   available: boolean;
   variants: ProductVariant[];
+  /** true when no exact match existed and a near model is offered instead. */
+  closest_match: boolean;
 }
 
 export interface SearchProductsResult {
@@ -125,7 +127,10 @@ async function postJson<T>(
   try {
     const res = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(env.AI_AGENTS_SECRET ? { 'X-Internal-Secret': env.AI_AGENTS_SECRET } : {}),
+      },
       body: JSON.stringify(body),
       signal: ctrl.signal,
     });
