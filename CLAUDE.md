@@ -13,6 +13,8 @@ steps, open decisions, roadmap). How to run/deploy: [docs/CS_MEMORY_RUNBOOK.md](
 - **Never run `pnpm vapi:recreate:apply`** — it deletes the Vapi assistant and changes its id.
   Use `pnpm vapi:add-tool` / `vapi:update-webhook` (dry run first, then `:apply`).
 - The brand is **JOOLA**, pronounced "YOO-la" (never "Julia"). Voice fix: `pnpm vapi:fix-brand-voice`.
+- **Shopify = Team JOOLA sandbox store only** (`b0e265-3` / `joola1.myshopify.com`, `sandbox.joola.com`),
+  also for Vercel/Vapi production. Never point any code, token or app at a live JOOLA store (JOOLA-USA etc.).
 - Do not touch the `natt_events*` RDS databases — they belong to a different project.
 - Changes to the live Vapi assistant, Vercel, or git push need the owner's explicit OK.
 

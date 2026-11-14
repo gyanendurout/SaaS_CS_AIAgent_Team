@@ -34,7 +34,7 @@ the "Infinity" connector, gap logging.
 | Vector memory | table `public.kb_chunks` + RPC `match_kb_chunks` in that project — **applied 2026-11-14, 214 chunks loaded** |
 | Voice | Vapi assistant **"JOOLA CS Warranty Assistant"**, id `397c019b-f428-4709-9473-2c102009a654`, **7 tools** (5 original + `search_knowledge` + `search_products`) |
 | Vapi webhook | **`https://joola-cs-api.vercel.app/webhooks/vapi`** (Vercel production) |
-| Shopify | Storefront API, store `b0e2…myshopify.com` (full value in `.env.local`), token reused from the Shopify chatbot, API version `2026-07` |
+| Shopify | **Team JOOLA sandbox store only** (`b0e265-3` / `joola1.myshopify.com`, primary domain `sandbox.joola.com`, Shopify Plus, USD, orders `#1001…`) — used by Vercel/Vapi production **on purpose** (owner decision 2026-11-14). Storefront API token reused from the Shopify chatbot, API version `2026-07`. Celigo syncs its orders to NetSuite. Live stores (JOOLA-USA etc., 18 in the org) are **out of scope** |
 | AI models | OpenAI GPT-4o (replies), `text-embedding-3-small` (memory) |
 | Shopify chatbot (reference only) | separate Bitbucket repo `joola-qb/joola-shopify-chat-bot`; a copy may sit in `Shopify-Chatbot/` here — **git-ignored, never commit** (its `.env` has real secrets) |
 
@@ -122,7 +122,7 @@ warranty-policy 90 pass, TypeScript clean in all apps, API build OK; retrieval
 | # | Feature | Value | Needs |
 |---|---|---|---|
 | 1 | **Gap logging** (questions memory couldn't answer, all channels) | CS sees missing knowledge | nothing new (Supabase) |
-| 3 | **Real Shopify orders** instead of seeded `orders`/`customers` in `lookup_order`, eligibility, pipeline | biggest upgrade | Shopify **Admin API** token (scopes `read_orders`, `read_customers`, `read_products`, `read_fulfillments`, + `read_all_orders` approval), the Remix repo `joola-qb/joola-shopify-usa-app`, approval for real customer data flow |
+| 3 | **Real Shopify orders** instead of seeded `orders`/`customers` in `lookup_order`, eligibility, pipeline | biggest upgrade | New read-only **Dev Dashboard app "JOOLA CS Agent" on Team JOOLA (sandbox)** — legacy custom apps can no longer be created and none of the 7 existing ones has `read_all_orders`; do **not** reuse Celigo/Migration/Sync tokens (write scopes). Scopes `read_orders`, `read_all_orders`, `read_customers`, `read_fulfillments`, `read_returns`, `read_products` + protected customer data; client-credentials token (24 h, auto-refresh); `ORDER_SOURCE` default-off switch |
 | 4 | joola.com policy pages as knowledge | official pages in memory | URL list + CS sign-off |
 | 5 | Trade-in / internal policies knowledge | more answers | D1 |
 | 6 | Answer cache | lower OpenAI cost | nothing new |
@@ -145,6 +145,7 @@ warranty-policy 90 pass, TypeScript clean in all apps, API build OK; retrieval
 | `vapi:add-tool` (PATCH in place) — **never `vapi:recreate:apply`** | recreate deletes the assistant and changes its id, breaking every configured app |
 | `AI_AGENTS_SECRET` only on the two paid endpoints | half-configured rollout can only switch off the voice tools, never the claim flow |
 | Read-only connectors in phase 1 | no risk of corrupting Shopify/ERP data |
+| **Shopify = Team JOOLA sandbox only**, even for Vercel/Vapi production | owner decision 2026-11-14: no production Shopify store is touched; switching later is an env change |
 
 ## 10. Resuming work (any machine / account)
 
