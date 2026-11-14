@@ -1,0 +1,142 @@
+# Project Status & Handoff — JOOLA CS AI Agent Team
+
+**Last updated:** 2026-11-14 · **Owner:** grout@joola.com · **Branch:** `feat/cs-memory` (not yet pushed)
+
+Read this first when you come back to the project or switch accounts. It records
+what exists, what is live, what is pending, and every decision made so far.
+**No secrets are stored here** — only variable names and where values live.
+
+| Need | Go to |
+|---|---|
+| How to run locally / deploy to Vercel / troubleshoot | [CS_MEMORY_RUNBOOK.md](CS_MEMORY_RUNBOOK.md) |
+| Test evidence and bugs fixed | [qa/2026-11-14-cs-memory-catalog-qa.md](qa/2026-11-14-cs-memory-catalog-qa.md) |
+| Design decisions (memory) | [plans/2026-11-14-cs-memory.md](plans/2026-11-14-cs-memory.md) |
+| Design decisions (catalogue) | [plans/2026-11-14-shopify-catalog.md](plans/2026-11-14-shopify-catalog.md) |
+
+---
+
+## 1. Goal
+
+Centralise the CS agents' knowledge and live store data so **every channel —
+voice calls (Vapi), email, web/contact form, post-call drafts, and later the
+Shopify storefront chatbot — uses the same memory and connectors**.
+Phase 1 (done): bring over what the separate Shopify chatbot had (knowledge
+memory + Shopify Storefront). Later phases: real orders (Shopify Admin), NetSuite,
+the "Infinity" connector, gap logging.
+
+## 2. Systems and environments
+
+| System | Fact |
+|---|---|
+| Repo | GitHub `gyanendurout/SaaS_CS_AIAgent_Team`, pnpm + Turbo monorepo |
+| Apps | `apps/api` (Fastify, Vercel) · `apps/ai-agents` (FastAPI + LangGraph, Vercel) · `apps/dashboard` (Next.js, :3000) · `apps/customer-demo` (Next.js, :3003) · `apps/vapi-setup` (Vapi admin scripts) |
+| Database | **Supabase `isrcdvhtfnbzlnvhgule` = PRODUCTION** (the only project; local dev also uses it) |
+| Vector memory | table `public.kb_chunks` + RPC `match_kb_chunks` in that project — **applied 2026-11-14, 214 chunks loaded** |
+| Voice | Vapi assistant **"JOOLA CS Warranty Assistant"**, id `397c019b-f428-4709-9473-2c102009a654`, **7 tools** (5 original + `search_knowledge` + `search_products`) |
+| Vapi webhook | currently **`https://uncoated-oxymoron-written.ngrok-free.dev/webhooks/vapi`** (laptop via ngrok) — must be switched to the Vercel API at go-live |
+| Shopify | Storefront API, store `b0e2…myshopify.com` (full value in `.env.local`), token reused from the Shopify chatbot, API version `2026-07` |
+| AI models | OpenAI GPT-4o (replies), `text-embedding-3-small` (memory) |
+| Shopify chatbot (reference only) | separate Bitbucket repo `joola-qb/joola-shopify-chat-bot`; a copy may sit in `Shopify-Chatbot/` here — **git-ignored, never commit** (its `.env` has real secrets) |
+
+## 3. What has been built (branch `feat/cs-memory`)
+
+| Commit | Content |
+|---|---|
+| `49d4411` | Shared knowledge memory (pgvector), live Shopify catalogue, `search_knowledge` + `search_products` voice tools, `vapi:add-tool` script, runbook |
+| `f61e83e` | QA pass: voice-phrasing fixes, connection pooling, timeouts, `AI_AGENTS_SECRET`, `/health` switches, QA report |
+
+**Behaviour switches (all default OFF = original behaviour):**
+
+| Switch | Values | Effect |
+|---|---|---|
+| `KNOWLEDGE_SOURCE` | `static` / `vector` | memory search for voice tool + email/web/post-call drafts |
+| `CATALOG_SOURCE` | `off` / `shopify` | live price / sale / stock voice tool |
+| `AI_AGENTS_SECRET` | unset / shared value | protects the two paid tool endpoints |
+
+**Quality at last check (2026-11-14):** ai-agents 89 tests pass (93 % coverage),
+warranty-policy 90 pass, TypeScript clean in all apps, API build OK; retrieval
+192/192 + 20/20 paraphrases; full voice tool round-trip 0.8–1.5 s.
+
+## 4. Current state — what is LIVE vs NOT
+
+| Item | State |
+|---|---|
+| `kb_chunks` table + 214 chunks in production Supabase | ✅ live (additive, nothing existing changed) |
+| Vapi assistant has `search_knowledge` + `search_products` | ✅ live (same assistant id; backups in `apps/vapi-setup/backups/`, git-ignored) |
+| Vapi `search_products` **updated description** (closest-match wording) | ❌ in repo only — re-push pending |
+| Code on GitHub | ❌ committed locally, **not pushed** |
+| Vercel (API + ai-agents) | ❌ still old code; new env vars not set |
+| Vapi webhook → Vercel | ❌ still → ngrok (calls go to the laptop; fail if it sleeps) |
+| Local `.env.local` | memory ON, catalogue ON, local `AI_AGENTS_SECRET` set, `PYTHON_AI_URL=http://127.0.0.1:8000` |
+
+## 5. Go-live checklist (in order)
+
+1. `git push -u origin feat/cs-memory` → PR / merge to `main`.
+2. Generate a **new** production secret (do not reuse the local one):
+   `python -c "import secrets; print(secrets.token_urlsafe(32))"`
+3. Vercel **API** project: `AI_AGENTS_SECRET` → redeploy. *(API first.)*
+4. Vercel **ai-agents** project: `KNOWLEDGE_SOURCE=vector`, `CATALOG_SOURCE=shopify`,
+   `SHOPIFY_STORE`, `SHOPIFY_STOREFRONT_TOKEN`, same `AI_AGENTS_SECRET` → redeploy.
+5. Verify: `GET <ai-agents>/health` → `knowledge_source: vector`, `catalog_enabled: true`,
+   `internal_auth: true`; then the curl checks in runbook §6.
+6. Re-push the tool description: `cd apps/vapi-setup && pnpm vapi:add-tool:apply -- search_products`.
+7. Point Vapi at Vercel: set `PUBLIC_BACKEND_URL=https://<api>.vercel.app` in `.env.local`,
+   then `pnpm vapi:update-webhook` (dry run) → `pnpm vapi:update-webhook:apply`.
+8. One real test call on the deployed demo ("Do you ship to Vietnam?", "Is the Kosmos Pro V in stock?").
+9. Confirm on Vercel: 20 concurrent `search_products` well under 2 s (pooling check).
+
+**Rollback:** switches back to `static`/`off` + redeploy; Vapi tool removal via backup
+(`PATCH { model: <backup> }`); DB objects via `migrations/memory/0001_kb_chunks.down.sql`.
+
+## 6. Open decisions / waiting on people
+
+| # | Question | Who |
+|---|---|---|
+| D1 | Is `joola_internal_policies.md` (25 % trade-in credit, $50 demo deposit) real policy? Excluded until confirmed (a test enforces it). | CS lead |
+| D2 | "Infinity" connector: the **JOOLA Infinity app** (paddle registration / subscription, per the voice prompt) or a warehouse/3PL? | Owner |
+| D3 | CS review of outdated answers in `knowledge/shopify/cs_product_guidance.md` ("late 2024", "end of 2024"); re-run ingest after edits | CS team |
+| D4 | Should a separate dev/staging Supabase exist? Today local testing writes to production. | Owner / DevOps |
+
+## 7. Security follow-ups
+
+- Rotate the **Shopify Storefront token** (it is in the chatbot's Bitbucket history) — update chatbot, `.env.local`, Vercel.
+- Clean the saved "allow" rules in `.claude/settings.json` / `.claude/settings.local.json` (≈42 embedded keys; git-ignored but plain text on disk) and rotate those keys.
+- Older ai-agents endpoints (pipeline, claims) are still unauthenticated (pre-existing) — keep the ai-agents URL private; consider extending `AI_AGENTS_SECRET`.
+
+## 8. Roadmap (next features) and what each needs
+
+| # | Feature | Value | Needs |
+|---|---|---|---|
+| 1 | **Gap logging** (questions memory couldn't answer, all channels) | CS sees missing knowledge | nothing new (Supabase) |
+| 3 | **Real Shopify orders** instead of seeded `orders`/`customers` in `lookup_order`, eligibility, pipeline | biggest upgrade | Shopify **Admin API** token (scopes `read_orders`, `read_customers`, `read_products`, `read_fulfillments`, + `read_all_orders` approval), the Remix repo `joola-qb/joola-shopify-usa-app`, approval for real customer data flow |
+| 4 | joola.com policy pages as knowledge | official pages in memory | URL list + CS sign-off |
+| 5 | Trade-in / internal policies knowledge | more answers | D1 |
+| 6 | Answer cache | lower OpenAI cost | nothing new |
+| 7 | Storefront chat history for callers | context across channels | chatbot RDS access + chatbot team OK |
+| 8 | Paddle Finder on calls | pre-sales | Paddle Selector service URL/auth (likely AWS-internal) |
+| 9 | Re-point the storefront chatbot to this system | true single memory | chatbot + Remix repo changes |
+| — | NetSuite (all-channel orders), Infinity connector | — | credentials; D2 |
+| — | Email/web drafts using live stock; "what's on sale" browsing | — | nothing new |
+
+## 9. Decision log (summary)
+
+| Decision | Why |
+|---|---|
+| Memory in **pgvector inside this project's Supabase** (not chatbot RDS/Chroma, not Google Vertex) | reachable from Vercel, no new infra, vectors survive deploys; the natt RDS is a different project and must not be touched |
+| **OpenAI embeddings** (not bge) | runs on Vercel serverless (no torch) |
+| supabase-py `rpc()` (no new DB driver) | zero new dependencies, HTTPS works on Vercel |
+| Catalogue via **Shopify title search (all words required)** instead of downloading the whole catalogue | probe: free-text search ranked badly; full catalogue = ~2 s per Vercel cold start; title search 0.3–0.6 s and precise |
+| Reuse the chatbot's Storefront token | owner decision; read-only token |
+| Everything behind **default-off switches**; new code in new modules | owner requirement: must be able to go back to previous behaviour |
+| `vapi:add-tool` (PATCH in place) — **never `vapi:recreate:apply`** | recreate deletes the assistant and changes its id, breaking every configured app |
+| `AI_AGENTS_SECRET` only on the two paid endpoints | half-configured rollout can only switch off the voice tools, never the claim flow |
+| Read-only connectors in phase 1 | no risk of corrupting Shopify/ERP data |
+
+## 10. Resuming work (any machine / account)
+
+1. Clone/pull, `git checkout feat/cs-memory` (or `main` after merge).
+2. Recreate `.env.local` from `.env.example` (values from the team's secret store / Vercel / Supabase / Shopify / Vapi dashboards) — never from git.
+3. Start servers as in runbook §5.1 (ai-agents on `127.0.0.1:8000`, API `:3001`).
+4. Tests: `cd apps/ai-agents && .venv/Scripts/python -m pytest -q` (offline, no keys needed).
+5. Check this file's §4–§6 for what is pending, then continue with §5 or §8.
+6. When you finish a work session, update §3, §4 and "Last updated" above.

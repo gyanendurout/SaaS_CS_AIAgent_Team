@@ -149,4 +149,6 @@ pnpm dev
 - [Business requirements](./docs/brd/)
 - [Architecture & design](./docs/design/)
 - [Warranty policy v1.0.0](./docs/policies/)
+- **[Project status & handoff — start here](./docs/PROJECT_STATUS.md)**
 - [CS shared memory runbook — local vs cloud](./docs/CS_MEMORY_RUNBOOK.md)
+- [QA report — memory + catalogue](./docs/qa/2026-11-14-cs-memory-catalog-qa.md)
