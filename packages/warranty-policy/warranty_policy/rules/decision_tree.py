@@ -218,6 +218,23 @@ def evaluate(claim: ClaimInput) -> DecisionResult:
                     notes="NFC extended coverage missed — defaulting to standard 6-month warranty.",
                 )
 
+    # Rule 17b — §4.5: an NFC paddle without the extension (registered late, never
+    # registered, or receipt not approved) is "automatically on the standard 6-month
+    # warranty". Past 6 months it is expired — it must not fall through to the
+    # 12-month NFC period used by Rules 18/19 (QA 2026-11-14, W1).
+    if is_nfc_product(claim) and not is_nfc_extended_eligible(claim):
+        standard_days = months_to_days(6)
+        if days_between(claim.purchase_date, claim.claim_date) > standard_days:
+            return DecisionResult(
+                decision=Decision.WARRANTY_EXPIRED,
+                reason_code="NFC_STANDARD_6MO_EXPIRED",
+                citation="§2.5, §4.5",
+                notes=(
+                    "NFC extended warranty not earned (registration outside 14 days or "
+                    "receipt not approved); standard 6-month warranty has passed."
+                ),
+            )
+
     # Rule 18 — §2.4: past warranty window for a product that does have one.
     if has_warranty(claim.product_type):
         period_days = months_to_days(get_terms(claim.product_type).period_months or 0)

@@ -68,12 +68,12 @@ const SCENARIOS_VOICE: Scenario[] = [
     tone: 'decline',
   },
   {
-    label: '6. NOT ELIGIBLE · late NFC registration',
+    label: '6. EXPIRED · late NFC registration',
     beCustomer: 'Emily White',
     orderNumber: 'JD-100005',
     email: 'emily.white@example.com',
     text: "My email is emily.white@example.com. I bought a Perseus 3 16mm in December, order JD-100005. I registered the NFC chip about a month after I got it. Am I still covered?",
-    outcome: 'NOT_ELIGIBLE — §4.5 registered outside 14d',
+    outcome: 'WARRANTY_EXPIRED — §4.5 late NFC = 6mo only',
     tone: 'expired',
   },
   {
@@ -121,19 +121,19 @@ const SCENARIOS_EMAIL: Scenario[] = [
     tone: 'decline',
   },
   {
-    label: '3. NOT ELIGIBLE · late NFC reg',
+    label: '3. EXPIRED · late NFC reg',
     beCustomer: 'Emily White',
     text:
       "Subject: Perseus 3 carbon face peeling — JD-100005\n\nHi,\n\nThe carbon face on my Perseus 3 16mm (order JD-100005, purchased December) is peeling near the throat. I did register it on the NFC chip, but a bit later — I think a month after it arrived.\n\nCan I still get this replaced?\n\nEmily",
-    outcome: 'NOT_ELIGIBLE — §2.5 outside 14d',
+    outcome: 'WARRANTY_EXPIRED — §4.5 late NFC = 6mo only',
     tone: 'expired',
   },
   {
-    label: '4. NOT ELIGIBLE · never registered',
+    label: '4. EXPIRED · past standard 6 months',
     beCustomer: 'Aisha Khan',
     text:
       "Subject: Solaire paddle broken\n\nHey,\n\nMy Solaire paddle (JD-100017) snapped at the handle today. I bought it directly from JOOLA in March. I didn't register the NFC chip — wasn't sure what to do with it. Hoping for a replacement.\n\nAisha",
-    outcome: 'NOT_ELIGIBLE — no NFC reg',
+    outcome: 'WARRANTY_EXPIRED — §2.4 standard 6mo passed',
     tone: 'decline',
   },
   {

@@ -236,6 +236,52 @@ def test_rule17_nfc_missed_registration_falls_to_standard(
     assert result.reason_code == "STANDARD_6MO_WARRANTY"
 
 
+@pytest.mark.parametrize(
+    "registration",
+    [
+        {"nfc_registered": True, "nfc_registration_date": date(2025, 1, 15)},  # 28 days late
+        {"nfc_registered": False},  # never registered
+    ],
+)
+def test_rule17b_nfc_without_extension_expires_after_6_months(
+    claim_with: Callable[..., ClaimInput], registration: dict
+) -> None:
+    """§4.5: missed the 14-day window → only the standard 6 months. An 11-month-old
+    claim is expired — it must not fall through to the 12-month NFC period (QA W1)."""
+    result = evaluate(
+        claim_with(
+            product_type=ProductType.PADDLE_NFC,
+            purchase_date=date(2024, 12, 18),
+            claim_date=date(2025, 11, 14),
+            nfc_receipt_uploaded=True,
+            nfc_receipt_approved=True,
+            **registration,
+        )
+    )
+    assert result.decision is Decision.WARRANTY_EXPIRED
+    assert result.reason_code == "NFC_STANDARD_6MO_EXPIRED"
+    assert "§4.5" in result.citation
+
+
+def test_rule16_on_time_nfc_still_covered_at_11_months(
+    claim_with: Callable[..., ClaimInput],
+) -> None:
+    """Regression guard: registering within 14 days keeps the 12-month cover."""
+    result = evaluate(
+        claim_with(
+            product_type=ProductType.PADDLE_NFC,
+            purchase_date=date(2024, 12, 18),
+            claim_date=date(2025, 11, 14),
+            nfc_registered=True,
+            nfc_registration_date=date(2024, 12, 20),
+            nfc_receipt_uploaded=True,
+            nfc_receipt_approved=True,
+        )
+    )
+    assert result.decision is Decision.ELIGIBLE_FOR_DAMAGE_REVIEW
+    assert result.reason_code == "NFC_EXTENDED_WARRANTY"
+
+
 # ── Rule 18 — §2.4 ──────────────────────────────────────────────────────
 def test_rule18_past_warranty_window(claim_with: Callable[..., ClaimInput]) -> None:
     """§2.4: 6-month paddle, claim filed at 10 months → WARRANTY_EXPIRED."""
