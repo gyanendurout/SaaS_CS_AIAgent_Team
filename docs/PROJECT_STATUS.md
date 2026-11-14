@@ -122,7 +122,7 @@ warranty-policy 90 pass, TypeScript clean in all apps, API build OK; retrieval
 | # | Feature | Value | Needs |
 |---|---|---|---|
 | 1 | **Gap logging** (questions memory couldn't answer, all channels) | CS sees missing knowledge | nothing new (Supabase) |
-| 3 | **Real Shopify orders** instead of seeded `orders`/`customers` in `lookup_order`, eligibility, pipeline | biggest upgrade | New read-only **Dev Dashboard app "JOOLA CS Agent" on Team JOOLA (sandbox)** — legacy custom apps can no longer be created and none of the 7 existing ones has `read_all_orders`; do **not** reuse Celigo/Migration/Sync tokens (write scopes). Scopes `read_orders`, `read_all_orders`, `read_customers`, `read_fulfillments`, `read_returns`, `read_products` + protected customer data; client-credentials token (24 h, auto-refresh); `ORDER_SOURCE` default-off switch |
+| 3 | **Real Shopify orders** instead of seeded `orders`/`customers` in `lookup_order`, eligibility, pipeline | biggest upgrade | Reuse the chatbot's Shopify app **`joola-ai-chatbot`** (client id `7214bca2…`, owner decision 2026-11-14 — owner is on the chatbot team) on Team JOOLA (sandbox); its scopes today are only `read_products,read_inventory,read_orders`. Do **not** reuse Celigo/Migration/Sync tokens (write scopes). Scopes `read_orders`, `read_all_orders`, `read_customers`, `read_fulfillments`, `read_returns`, `read_products` + protected customer data; client-credentials token (24 h, auto-refresh); `ORDER_SOURCE` default-off switch |
 | 4 | joola.com policy pages as knowledge | official pages in memory | URL list + CS sign-off |
 | 5 | Trade-in / internal policies knowledge | more answers | D1 |
 | 6 | Answer cache | lower OpenAI cost | nothing new |
