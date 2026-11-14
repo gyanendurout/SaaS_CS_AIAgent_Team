@@ -14,20 +14,20 @@ export function IdentityPicker() {
   const { identities, current, loading, fromDb, selectCustomer } = useSupabase();
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex min-w-0 items-center gap-2">
       <label
         htmlFor="identity"
         className="hidden font-sans text-xs font-bold uppercase tracking-mega text-joola-stone sm:inline"
       >
         Play as
       </label>
-      <div className="relative">
+      <div className="relative min-w-0">
         <select
           id="identity"
           value={current?.id ?? ''}
           onChange={(e) => selectCustomer(e.target.value)}
           disabled={loading || identities.length === 0}
-          className="h-9 min-w-[200px] rounded-sm border border-joola-mist bg-white pl-3 pr-8 font-sans text-sm text-joola-ink focus:border-joola-black focus:outline-none focus:ring-2 focus:ring-joola-yellow disabled:opacity-50"
+          className="h-9 w-full min-w-0 max-w-[55vw] truncate sm:min-w-[200px] sm:max-w-none rounded-sm border border-joola-mist bg-white pl-3 pr-8 font-sans text-sm text-joola-ink focus:border-joola-black focus:outline-none focus:ring-2 focus:ring-joola-yellow disabled:opacity-50"
         >
           {identities.map((c) => (
             <option key={c.id} value={c.id}>
