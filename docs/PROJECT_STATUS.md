@@ -33,7 +33,7 @@ the "Infinity" connector, gap logging.
 | Database | **Supabase `isrcdvhtfnbzlnvhgule` = PRODUCTION** (the only project; local dev also uses it) |
 | Vector memory | table `public.kb_chunks` + RPC `match_kb_chunks` in that project — **applied 2026-11-14, 214 chunks loaded** |
 | Voice | Vapi assistant **"JOOLA CS Warranty Assistant"**, id `397c019b-f428-4709-9473-2c102009a654`, **7 tools** (5 original + `search_knowledge` + `search_products`) |
-| Vapi webhook | currently **`https://uncoated-oxymoron-written.ngrok-free.dev/webhooks/vapi`** (laptop via ngrok) — must be switched to the Vercel API at go-live |
+| Vapi webhook | **`https://joola-cs-api.vercel.app/webhooks/vapi`** (Vercel production) |
 | Shopify | Storefront API, store `b0e2…myshopify.com` (full value in `.env.local`), token reused from the Shopify chatbot, API version `2026-07` |
 | AI models | OpenAI GPT-4o (replies), `text-embedding-3-small` (memory) |
 | Shopify chatbot (reference only) | separate Bitbucket repo `joola-qb/joola-shopify-chat-bot`; a copy may sit in `Shopify-Chatbot/` here — **git-ignored, never commit** (its `.env` has real secrets) |
@@ -63,17 +63,17 @@ warranty-policy 90 pass, TypeScript clean in all apps, API build OK; retrieval
 |---|---|
 | `kb_chunks` table + 214 chunks in production Supabase | ✅ live (additive, nothing existing changed) |
 | Vapi assistant has `search_knowledge` + `search_products` | ✅ live (same assistant id; backups in `apps/vapi-setup/backups/`, git-ignored) |
-| Vapi `search_products` **updated description** (closest-match wording) | ❌ in repo only — re-push pending (go-live step 6) |
+| Vapi `search_products` **updated description** (closest-match wording) | ✅ pushed 2026-11-14 (backup `backups/2026-11-14T20-38-49-147Z-model.json`) |
 | Code on GitHub | ✅ pushed; `main` fast-forwarded to `57d5f8f` |
 | Vercel (API + ai-agents) | ✅ deployed `57d5f8f` with `KNOWLEDGE_SOURCE=vector`, `CATALOG_SOURCE=shopify`, Shopify vars, new prod `AI_AGENTS_SECRET` (both projects, production+preview). `/health` OK; memory + catalogue answer via `https://joola-cs-api.vercel.app/api/tools/*`; direct ai-agents call without secret → 401; 20 concurrent lookups 0.35–0.55 s warm (first burst after a deploy can degrade to `enabled:false` on cold start) |
 | Vercel (dashboard + customer-demo) | code unchanged by this work; Vercel's Ignored Build Step (turbo-ignore) cancels their builds when their folders don't change — that is expected, not a failure. Fixed 2026-11-14: dashboard **preview** builds failed because `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` was Production-only — now Production + Preview |
-| Vapi webhook → Vercel | ❌ still → ngrok (calls go to the laptop; fail if it sleeps). Correct target: `https://joola-cs-api.vercel.app/webhooks/vapi` (verified: path exists, webhook secret on Vercel = local) |
+| Vapi webhook → Vercel | ✅ `https://joola-cs-api.vercel.app/webhooks/vapi` since 2026-11-14 (previous: `https://uncoated-oxymoron-written.ngrok-free.dev/webhooks/vapi` — switch back with the same command for local testing) |
 | Local `.env.local` | memory ON, catalogue ON, local `AI_AGENTS_SECRET` set, `PYTHON_AI_URL=http://127.0.0.1:8000` |
 
 ## 5. Go-live checklist (in order)
 
-> **Status 2026-11-14:** steps 1–5 and 9 DONE (pushed, Vercel env set, deployed, verified).
-> **Remaining:** step 6 (re-push tool description) and step 7 (webhook) — run:
+> **Status 2026-11-14:** steps 1–7 and 9 DONE. **Remaining:** step 8 — one real test call on the customer demo.
+> (For reference, steps 6–7 were run as:)
 > `cd apps/vapi-setup && PUBLIC_BACKEND_URL=https://joola-cs-api.vercel.app/webhooks/vapi pnpm vapi:update-webhook:apply`
 > then `pnpm vapi:add-tool:apply -- search_products`, then step 8 (real test call).
 > The URL **must include `/webhooks/vapi`** (script uses it verbatim). The production
