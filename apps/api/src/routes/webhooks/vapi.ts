@@ -477,4 +477,5 @@ const TOOL_PATHS: Record<string, string> = {
   escalate_to_human: '/api/tools/escalate_to_human',
   search_knowledge: '/api/tools/search_knowledge',
   search_products: '/api/tools/search_products',
+  get_order_status: '/api/tools/get_order_status',
 };

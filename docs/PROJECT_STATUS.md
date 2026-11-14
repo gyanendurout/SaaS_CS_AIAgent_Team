@@ -46,6 +46,7 @@ the "Infinity" connector, gap logging.
 | `f61e83e` | QA pass: voice-phrasing fixes, connection pooling, timeouts, `AI_AGENTS_SECRET`, `/health` switches, QA report |
 | `57d5f8f`…`020268e` | docs: handoff, go-live state, Vercel preview env fix, Vapi webhook → Vercel (all pushed, `main` = `020268e`) |
 | `2d85522` + `045f9fb` | fix: JOOLA pronounced "YOO-la" on calls (Vapi part live) + misheard-brand mapping in searches — pushed to `main`, ai-agents + api redeployed READY |
+| (next commit, local) | feat: `get_order_status` — live Shopify Admin order status (Team JOOLA sandbox), caller check by email or postcode, failed-check brake, no personal data returned; behind `ORDER_SOURCE=off`. **Not live**: Vapi tool not added, Vercel vars not set, app `joola-ai-chatbot` not yet installed on Team JOOLA |
 
 **Behaviour switches (all default OFF = original behaviour):**
 
@@ -53,7 +54,8 @@ the "Infinity" connector, gap logging.
 |---|---|---|
 | `KNOWLEDGE_SOURCE` | `static` / `vector` | memory search for voice tool + email/web/post-call drafts |
 | `CATALOG_SOURCE` | `off` / `shopify` | live price / sale / stock voice tool |
-| `AI_AGENTS_SECRET` | unset / shared value | protects the two paid tool endpoints |
+| `ORDER_SOURCE` | `off` / `shopify` | live order status voice tool (`get_order_status`); needs `SHOPIFY_ADMIN_CLIENT_ID` + `SHOPIFY_ADMIN_CLIENT_SECRET` |
+| `AI_AGENTS_SECRET` | unset / shared value | protects the paid/live tool endpoints |
 
 **Quality at last check (2026-11-14):** ai-agents 89 tests pass (93 % coverage),
 warranty-policy 90 pass, TypeScript clean in all apps, API build OK; retrieval
@@ -71,6 +73,7 @@ warranty-policy 90 pass, TypeScript clean in all apps, API build OK; retrieval
 | Vercel (dashboard + customer-demo) | code unchanged by this work; Vercel's Ignored Build Step (turbo-ignore) cancels their builds when their folders don't change — that is expected, not a failure. Fixed 2026-11-14: dashboard **preview** builds failed because `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` was Production-only — now Production + Preview |
 | Vapi webhook → Vercel | ✅ `https://joola-cs-api.vercel.app/webhooks/vapi` since 2026-11-14 (previous: `https://uncoated-oxymoron-written.ngrok-free.dev/webhooks/vapi` — switch back with the same command for local testing) |
 | Brand pronunciation (JOOLA = "YOO-la", was heard as "Julia") | Vapi part ✅ live 2026-11-14: voice text-replacement JOOLA→"Yoola" (speech only), Deepgram `keyterm: JOOLA`, `## BRAND NAME` note in the live prompt (`pnpm vapi:fix-brand-voice[:apply]`, backup `backups/2026-11-14T20-53-14-905Z-brand-voice.json`). Search part (`app/brand.py`: Julia/Jula/Yola/Yoola/Jolla → JOOLA in memory + catalogue queries) is live once pushed to `main` |
+| Live order status (`get_order_status`) | code + tests done (132 Python tests pass); waiting on: `joola-ai-chatbot` installed on Team JOOLA with `read_all_orders`, `read_customers`, `read_fulfillments`, `read_returns` + protected customer data (email, address); client secret in `.env.local`; then local test, Vercel vars, `pnpm vapi:add-tool -- get_order_status` (owner OK) |
 | Local `.env.local` | memory ON, catalogue ON, local `AI_AGENTS_SECRET` set, `PYTHON_AI_URL=http://127.0.0.1:8000` |
 
 ## 5. Go-live checklist (in order)

@@ -11,6 +11,7 @@ Seven tools:
 | /tools/escalate_to_human            | insert into escalations + bump claim status            |
 | /tools/search_knowledge             | shared kb_chunks memory search (KNOWLEDGE_SOURCE gate) |
 | /tools/search_products              | live Shopify price/sale/stock (CATALOG_SOURCE gate)    |
+| /tools/get_order_status             | live Shopify order status, caller-verified (ORDER_SOURCE gate) |
 """
 
 from __future__ import annotations
@@ -28,6 +29,7 @@ from app.deps import require_internal_secret
 from app.graph.build import get_compiled_graph
 from app.graph.state import PipelineState
 from app.memory.service import search_knowledge
+from app.orders.service import get_order_status, orders_enabled
 from app.services.audit import write_case_event
 from app.services.supabase_client import get_supabase
 from warranty_policy import ClaimInput, DecisionResult, evaluate
@@ -400,3 +402,57 @@ async def search_products_route(req: SearchProductsRequest) -> SearchProductsRes
     enabled = catalog_enabled()
     found = await search_products(req.query, limit=req.limit) if enabled else []
     return SearchProductsResponse(enabled=enabled, results=[Product(**p) for p in found])
+
+
+class GetOrderStatusRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    order_number: str = Field(..., min_length=1, max_length=40)
+    email: str | None = Field(default=None, max_length=254)
+    postcode: str | None = Field(default=None, max_length=16)
+
+
+class OrderItem(BaseModel):
+    title: str | None
+    quantity: int | None
+
+
+class OrderShipment(BaseModel):
+    status: str | None
+    carrier: str | None
+    tracking_number: str | None
+    tracking_url: str | None
+
+
+class OrderReturn(BaseModel):
+    name: str | None
+    status: str | None
+
+
+class OrderStatus(BaseModel):
+    order_number: str | None
+    placed_on: str | None
+    payment_status: str | None
+    fulfillment_status: str | None
+    cancelled: bool
+    items: list[OrderItem]
+    shipments: list[OrderShipment]
+    returns: list[OrderReturn]
+
+
+class GetOrderStatusResponse(BaseModel):
+    enabled: bool
+    status: str
+    order: OrderStatus | None
+
+
+@router.post(
+    "/get_order_status",
+    response_model=GetOrderStatusResponse,
+    dependencies=[Depends(require_internal_secret)],
+)
+async def get_order_status_route(req: GetOrderStatusRequest) -> GetOrderStatusResponse:
+    """``enabled=false`` while ORDER_SOURCE=off — callers fall back to lookup_order."""
+    result = await get_order_status(req.order_number, email=req.email, postcode=req.postcode)
+    order = OrderStatus(**result["order"]) if result["order"] else None
+    return GetOrderStatusResponse(enabled=orders_enabled(), status=result["status"], order=order)

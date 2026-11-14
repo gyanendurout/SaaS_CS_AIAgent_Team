@@ -57,7 +57,17 @@ class Settings(BaseSettings):
     )
     shopify_store: str = Field(default="", description="<store>.myshopify.com")
     shopify_storefront_token: str = Field(default="", description="Storefront API access token")
-    shopify_api_version: str = Field(default="2026-07", description="Storefront API version")
+    shopify_api_version: str = Field(default="2026-07", description="Storefront/Admin API version")
+
+    order_source: Literal["off", "shopify"] = Field(
+        default="off",
+        description="off = no live order status (original behaviour); "
+        "shopify = order status via the Shopify Admin API (joola-ai-chatbot app)",
+    )
+    shopify_admin_client_id: str = Field(default="", description="Shopify app client id")
+    shopify_admin_client_secret: str = Field(
+        default="", description="Shopify app client secret (client-credentials token grant)"
+    )
 
     ai_agents_secret: str = Field(
         default="",
@@ -74,6 +84,18 @@ class Settings(BaseSettings):
             return normalized
         logging.getLogger(__name__).warning(
             "unknown CATALOG_SOURCE=%r — using 'off' (catalogue off)", value
+        )
+        return "off"
+
+    @field_validator("order_source", mode="before")
+    @classmethod
+    def _lenient_order_source(cls, value: object) -> str:
+        """A typo in the order flag must not stop the service — fall back to off."""
+        normalized = str(value).strip().lower()
+        if normalized in ("off", "shopify"):
+            return normalized
+        logging.getLogger(__name__).warning(
+            "unknown ORDER_SOURCE=%r — using 'off' (live orders off)", value
         )
         return "off"
 

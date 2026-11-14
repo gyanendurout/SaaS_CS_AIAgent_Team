@@ -274,6 +274,25 @@ Vercel **ai-agents** project and redeploy.
 Not supported yet: browsing ("what's on sale?"), order status (still seeded data —
 needs the Shopify Admin API), using stock inside email/web drafts.
 
+### 10b. Live order status (Shopify Admin, `get_order_status`)
+
+- **Store:** Team JOOLA sandbox only (same `SHOPIFY_STORE`). App: the chatbot's `joola-ai-chatbot`
+  (client id `7214bca2…`), token via client-credentials grant, cached ~24 h, refreshed on 401.
+- **Env:** `ORDER_SOURCE=shopify`, `SHOPIFY_ADMIN_CLIENT_ID`, `SHOPIFY_ADMIN_CLIENT_SECRET` (ai-agents only).
+- **Flow:** Vapi → `POST /api/tools/get_order_status` (API) → `/tools/get_order_status` (ai-agents,
+  `X-Internal-Secret`) → Admin GraphQL `orders(query:"name:#<digits>")`.
+- **Caller check:** order number + email **or** postcode on the order. A mismatch answers exactly like
+  a missing order (`not_found`). 5 failed checks per order number (50 overall) in 15 min →
+  `too_many_attempts` (per warm instance).
+- **Returned:** order number, date, payment/fulfilment status, cancelled, items, shipments (carrier,
+  tracking), returns. Never email, address, phone or payment details; logs hold outcome only.
+- **Statuses:** `ok`, `not_found`, `needs_verification`, `invalid_order_number`, `too_many_attempts`,
+  `unavailable`, `disabled`. Off/unavailable → the assistant falls back to `lookup_order`.
+- **Shopify app needs:** `read_orders` + `read_all_orders` (else only ~60 days), `read_customers`,
+  `read_fulfillments`, `read_returns`, protected customer data (email, address); installed on Team JOOLA.
+  Log line "Shopify denied order fields" = protected data / scope missing.
+- **Roll back:** `ORDER_SOURCE=off` (or remove the Vapi tool via backup restore).
+
 ## 11. Known limitations
 
 - No separate dev/staging Supabase: local development uses production (see the warning in section 1).

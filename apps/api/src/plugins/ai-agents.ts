@@ -94,6 +94,30 @@ export interface SearchProductsResult {
   results: Product[];
 }
 
+export interface OrderStatus {
+  order_number: string | null;
+  placed_on: string | null;
+  payment_status: string | null;
+  fulfillment_status: string | null;
+  cancelled: boolean;
+  items: { title: string | null; quantity: number | null }[];
+  shipments: {
+    status: string | null;
+    carrier: string | null;
+    tracking_number: string | null;
+    tracking_url: string | null;
+  }[];
+  returns: { name: string | null; status: string | null }[];
+}
+
+export interface GetOrderStatusResult {
+  /** false while ai-agents runs with ORDER_SOURCE=off. */
+  enabled: boolean;
+  /** ok | not_found | needs_verification | invalid_order_number | unavailable | disabled */
+  status: string;
+  order: OrderStatus | null;
+}
+
 export interface AiAgentsClient {
   /**
    * `claimInput` must be in `warranty_policy.ClaimInput` shape (the route is
@@ -104,6 +128,11 @@ export interface AiAgentsClient {
   runPipeline(input: PipelineRunInput): Promise<PipelineRunResult>;
   searchKnowledge(query: string): Promise<SearchKnowledgeResult>;
   searchProducts(query: string): Promise<SearchProductsResult>;
+  getOrderStatus(input: {
+    order_number: string;
+    email?: string;
+    postcode?: string;
+  }): Promise<GetOrderStatusResult>;
 }
 
 declare module 'fastify' {
@@ -188,6 +217,14 @@ const aiAgentsPlugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       return postJson<SearchProductsResult>(
         `${base}/tools/search_products`,
         { query },
+        app.log,
+        LIVE_TOOL_TIMEOUT_MS,
+      );
+    },
+    async getOrderStatus(input) {
+      return postJson<GetOrderStatusResult>(
+        `${base}/tools/get_order_status`,
+        input,
         app.log,
         LIVE_TOOL_TIMEOUT_MS,
       );

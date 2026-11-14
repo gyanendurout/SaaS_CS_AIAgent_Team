@@ -158,3 +158,11 @@ export const SearchProductsInput = z.object({
   query: z.string().trim().min(1).max(200),
 });
 export type SearchProductsInput = z.infer<typeof SearchProductsInput>;
+
+/** get_order_status — live Shopify order status; email OR postcode proves the order is the caller's. */
+export const GetOrderStatusInput = z.object({
+  order_number: z.string().trim().min(1).max(40),
+  email: z.string().trim().max(254).optional(),
+  postcode: z.string().trim().max(16).optional(),
+});
+export type GetOrderStatusInput = z.infer<typeof GetOrderStatusInput>;
