@@ -46,7 +46,7 @@ the "Infinity" connector, gap logging.
 | `f61e83e` | QA pass: voice-phrasing fixes, connection pooling, timeouts, `AI_AGENTS_SECRET`, `/health` switches, QA report |
 | `57d5f8f`…`020268e` | docs: handoff, go-live state, Vercel preview env fix, Vapi webhook → Vercel (all pushed, `main` = `020268e`) |
 | `2d85522` + `045f9fb` | fix: JOOLA pronounced "YOO-la" on calls (Vapi part live) + misheard-brand mapping in searches — pushed to `main`, ai-agents + api redeployed READY |
-| (next commit, local) | feat: `get_order_status` — live Shopify Admin order status (Team JOOLA sandbox), caller check by email or postcode, failed-check brake, no personal data returned; behind `ORDER_SOURCE=off`. **Not live**: Vapi tool not added, Vercel vars not set, app `joola-ai-chatbot` not yet installed on Team JOOLA |
+| (next commit, local) | feat: `get_order_status` — live Shopify Admin order status (Team JOOLA sandbox), caller check by email or postcode, failed-check brake, no personal data returned; behind `ORDER_SOURCE=off`. **Not live**: Vapi tool not added, Vercel vars not set |
 
 **Behaviour switches (all default OFF = original behaviour):**
 
@@ -73,7 +73,7 @@ warranty-policy 90 pass, TypeScript clean in all apps, API build OK; retrieval
 | Vercel (dashboard + customer-demo) | code unchanged by this work; Vercel's Ignored Build Step (turbo-ignore) cancels their builds when their folders don't change — that is expected, not a failure. Fixed 2026-11-14: dashboard **preview** builds failed because `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` was Production-only — now Production + Preview |
 | Vapi webhook → Vercel | ✅ `https://joola-cs-api.vercel.app/webhooks/vapi` since 2026-11-14 (previous: `https://uncoated-oxymoron-written.ngrok-free.dev/webhooks/vapi` — switch back with the same command for local testing) |
 | Brand pronunciation (JOOLA = "YOO-la", was heard as "Julia") | Vapi part ✅ live 2026-11-14: voice text-replacement JOOLA→"Yoola" (speech only), Deepgram `keyterm: JOOLA`, `## BRAND NAME` note in the live prompt (`pnpm vapi:fix-brand-voice[:apply]`, backup `backups/2026-11-14T20-53-14-905Z-brand-voice.json`). Search part (`app/brand.py`: Julia/Jula/Yola/Yoola/Jolla → JOOLA in memory + catalogue queries) is live once pushed to `main` |
-| Live order status (`get_order_status`) | code + tests done (132 Python tests pass); waiting on: `joola-ai-chatbot` installed on Team JOOLA with `read_all_orders`, `read_customers`, `read_fulfillments`, `read_returns` + protected customer data (email, address); client secret in `.env.local`; then local test, Vercel vars, `pnpm vapi:add-tool -- get_order_status` (owner OK) |
+| Live order status (`get_order_status`) | code done (132 tests); **verified against Team JOOLA 2026-11-14**: app `JOOLA CS Agent` installed, scopes `read_orders,read_all_orders,read_customers,read_fulfillments,read_returns` granted, 4 301 orders visible back to #1001 (2024), email + postcode readable, right email → `ok` (~0.2 s), wrong email / missing → `not_found`, tracking (99 Minutos) mapped. Credentials in local `.env.local` only. **Not live yet**: Vercel vars, push, `pnpm vapi:add-tool -- get_order_status` (owner OK). Owner to rotate the client secret (it was pasted in chat) |
 | Local `.env.local` | memory ON, catalogue ON, local `AI_AGENTS_SECRET` set, `PYTHON_AI_URL=http://127.0.0.1:8000` |
 
 ## 5. Go-live checklist (in order)
@@ -125,7 +125,7 @@ warranty-policy 90 pass, TypeScript clean in all apps, API build OK; retrieval
 | # | Feature | Value | Needs |
 |---|---|---|---|
 | 1 | **Gap logging** (questions memory couldn't answer, all channels) | CS sees missing knowledge | nothing new (Supabase) |
-| 3 | **Real Shopify orders** instead of seeded `orders`/`customers` in `lookup_order`, eligibility, pipeline | biggest upgrade | Reuse the chatbot's Shopify app **`joola-ai-chatbot`** (client id `7214bca2…`, owner decision 2026-11-14 — owner is on the chatbot team) on Team JOOLA (sandbox); its scopes today are only `read_products,read_inventory,read_orders`. Do **not** reuse Celigo/Migration/Sync tokens (write scopes). Scopes `read_orders`, `read_all_orders`, `read_customers`, `read_fulfillments`, `read_returns`, `read_products` + protected customer data; client-credentials token (24 h, auto-refresh); `ORDER_SOURCE` default-off switch |
+| 3 | **Real Shopify orders** instead of seeded `orders`/`customers` in `lookup_order`, eligibility, pipeline | biggest upgrade | Dedicated Dev Dashboard app **`JOOLA CS Agent`** (org `101837077`, app `447539445761`, version `v2-read-only-orders`), installed on Team JOOLA only, 2026-11-14 — reusing `joola-ai-chatbot` was dropped (not installed on Team JOOLA). Do **not** reuse Celigo/Migration/Sync tokens (write scopes). Scopes `read_orders`, `read_all_orders`, `read_customers`, `read_fulfillments`, `read_returns`, `read_products` + protected customer data; client-credentials token (24 h, auto-refresh); `ORDER_SOURCE` default-off switch |
 | 4 | joola.com policy pages as knowledge | official pages in memory | URL list + CS sign-off |
 | 5 | Trade-in / internal policies knowledge | more answers | D1 |
 | 6 | Answer cache | lower OpenAI cost | nothing new |

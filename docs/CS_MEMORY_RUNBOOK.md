@@ -276,8 +276,11 @@ needs the Shopify Admin API), using stock inside email/web drafts.
 
 ### 10b. Live order status (Shopify Admin, `get_order_status`)
 
-- **Store:** Team JOOLA sandbox only (same `SHOPIFY_STORE`). App: the chatbot's `joola-ai-chatbot`
-  (client id `7214bca2…`), token via client-credentials grant, cached ~24 h, refreshed on 401.
+- **Store:** Team JOOLA sandbox only (same `SHOPIFY_STORE`). App: **`JOOLA CS Agent`** (Dev Dashboard org `101837077`,
+  app `447539445761`), installed on Team JOOLA only; token via client-credentials grant, cached ~24 h,
+  refreshed on 401. Error `app_not_installed` from the token endpoint = app not installed on the store.
+- **Rotate the secret:** Dev Dashboard → JOOLA CS Agent → Settings → Credentials → Rotate, then update
+  `SHOPIFY_ADMIN_CLIENT_SECRET` in `.env.local` and Vercel (ai-agents), redeploy.
 - **Env:** `ORDER_SOURCE=shopify`, `SHOPIFY_ADMIN_CLIENT_ID`, `SHOPIFY_ADMIN_CLIENT_SECRET` (ai-agents only).
 - **Flow:** Vapi → `POST /api/tools/get_order_status` (API) → `/tools/get_order_status` (ai-agents,
   `X-Internal-Secret`) → Admin GraphQL `orders(query:"name:#<digits>")`.
@@ -288,8 +291,9 @@ needs the Shopify Admin API), using stock inside email/web drafts.
   tracking), returns. Never email, address, phone or payment details; logs hold outcome only.
 - **Statuses:** `ok`, `not_found`, `needs_verification`, `invalid_order_number`, `too_many_attempts`,
   `unavailable`, `disabled`. Off/unavailable → the assistant falls back to `lookup_order`.
-- **Shopify app needs:** `read_orders` + `read_all_orders` (else only ~60 days), `read_customers`,
-  `read_fulfillments`, `read_returns`, protected customer data (email, address); installed on Team JOOLA.
+- **Shopify app has:** `read_orders`, `read_all_orders`, `read_customers`, `read_fulfillments`, `read_returns`
+  (no `write_`). Dev Dashboard apps had no separate protected-data / read-all-orders request: email,
+  postcode and full history were readable straight after install (checked 2026-11-14).
   Log line "Shopify denied order fields" = protected data / scope missing.
 - **Roll back:** `ORDER_SOURCE=off` (or remove the Vapi tool via backup restore).
 
