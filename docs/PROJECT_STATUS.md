@@ -72,6 +72,16 @@ warranty-policy 90 pass, TypeScript clean in all apps, API build OK; retrieval
 
 ## 5. Go-live checklist (in order)
 
+> **Status 2026-11-14:** steps 1–5 and 9 DONE (pushed, Vercel env set, deployed, verified).
+> **Remaining:** step 6 (re-push tool description) and step 7 (webhook) — run:
+> `cd apps/vapi-setup && PUBLIC_BACKEND_URL=https://joola-cs-api.vercel.app/webhooks/vapi pnpm vapi:update-webhook:apply`
+> then `pnpm vapi:add-tool:apply -- search_products`, then step 8 (real test call).
+> The URL **must include `/webhooks/vapi`** (script uses it verbatim). The production
+> `AI_AGENTS_SECRET` exists only in Vercel (API + ai-agents, type sensitive) — to rotate,
+> generate a new one and set it on both projects, then redeploy both.
+> Vercel projects: `joola-cs-api`, `joola-cs-ai-agents`, `joola-cs-dashboard`, `joola-cs-customer-demo`
+> (team of Vercel user `grout-9590`, all auto-deploy from GitHub `main`).
+
 1. `git push -u origin feat/cs-memory` → PR / merge to `main`.
 2. Generate a **new** production secret (do not reuse the local one):
    `python -c "import secrets; print(secrets.token_urlsafe(32))"`
