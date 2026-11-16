@@ -1,7 +1,8 @@
 """Agent 06 — Customer Reply Drafter.
 
 Only LLM call in the pipeline. Sends the cached system prompt + a per-claim
-user message to GPT-4o; expects strict JSON back; inserts a ``drafts`` row
+user message to the draft model (GPT-4o, or Claude when LLM_PROVIDER=anthropic —
+see app/services/llm.py); expects strict JSON back; inserts a ``drafts`` row
 in ``pending_approval`` state.
 """
 
@@ -18,7 +19,7 @@ from app.memory.service import search_knowledge
 from app.prompts import SYSTEM_PROMPT, render_user_message
 from app.services.agent_state import update_agent_state
 from app.services.audit import write_case_event
-from app.services.openai_client import get_openai
+from app.services.llm import draft_reply
 from app.services.supabase_client import get_supabase
 
 log = logging.getLogger(__name__)
@@ -67,21 +68,7 @@ async def run(state: PipelineState) -> PipelineState:
             knowledge=knowledge,
         )
 
-        client = get_openai()
-
-        def _call_openai() -> str:
-            chat = client.chat.completions.create(
-                model=settings.openai_model,
-                messages=[
-                    {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": user_msg},
-                ],
-                response_format={"type": "json_object"},
-                temperature=0.4,
-            )
-            return chat.choices[0].message.content or "{}"
-
-        raw_reply = await asyncio.to_thread(_call_openai)
+        raw_reply, model_used = await asyncio.to_thread(draft_reply, SYSTEM_PROMPT, user_msg)
         reply = _parse_reply(raw_reply)
 
         state["voice_reply"] = reply["voice_reply"]
@@ -127,7 +114,7 @@ async def run(state: PipelineState) -> PipelineState:
                 "draft_id": draft_id,
                 "voice_chars": len(reply["voice_reply"]),
                 "email_chars": len(reply["email_body"]),
-                "model": settings.openai_model,
+                "model": model_used,
             },
         )
 

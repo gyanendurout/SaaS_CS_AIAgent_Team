@@ -28,6 +28,9 @@ os.environ["ORDER_SAMPLE_EMAIL_DOMAINS"] = ""
 os.environ["KNOWLEDGE_CACHE_TTL_S"] = "0"
 os.environ["GAP_LOG"] = "off"
 os.environ["GAPS_API_KEY"] = ""
+os.environ["LLM_PROVIDER"] = "openai"
+os.environ["ANTHROPIC_API_KEY"] = ""
+os.environ["ANTHROPIC_MODEL"] = "claude-haiku-5-5"
 os.environ["AI_AGENTS_SECRET"] = ""
 
 
@@ -200,10 +203,10 @@ def fake_supabase(monkeypatch: pytest.MonkeyPatch) -> FakeSupabase:
 def fake_openai(monkeypatch: pytest.MonkeyPatch) -> FakeOpenAI:
     fake = FakeOpenAI()
     import app.services.openai_client as oa_mod
-    import app.graph.nodes.response as response_mod
+    import app.services.llm as llm_mod  # the draft call lives here (LLM_PROVIDER switch)
 
     oa_mod.get_openai.cache_clear()  # type: ignore[attr-defined]
-    for mod in (oa_mod, response_mod):
+    for mod in (oa_mod, llm_mod):
         monkeypatch.setattr(mod, "get_openai", lambda fake=fake: fake)
     return fake
 

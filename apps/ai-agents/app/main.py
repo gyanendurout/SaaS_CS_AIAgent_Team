@@ -41,7 +41,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     log.info(
         "joola-ai-agents v%s ready — model=%s policy=%s",
         __version__,
-        settings.openai_model,
+        settings.anthropic_model if settings.llm_provider == "anthropic" else settings.openai_model,
         settings.policy_version,
     )
 

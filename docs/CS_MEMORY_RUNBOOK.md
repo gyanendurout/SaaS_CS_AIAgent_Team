@@ -324,6 +324,22 @@ signed `tool-calls` message to `/webhooks/vapi`.
 Voice note: Vapi's GPT-4o runs on every turn (it *is* the conversation), so repeats can't skip
 the model; savings come from the reply cap, small tool results and the knowledge cache.
 
+### 10e. Draft writer: OpenAI or Claude (`LLM_PROVIDER`)
+
+Email / web / post-call reply drafts (`app/graph/nodes/response.py` → `app/services/llm.py`).
+Voice is unaffected (Vapi keeps GPT-4o). Embeddings stay on OpenAI (no Anthropic equivalent).
+
+| Env (ai-agents) | Value |
+|---|---|
+| `LLM_PROVIDER` | `openai` (default, original GPT-4o) · `anthropic` (Claude); typo → openai |
+| `ANTHROPIC_API_KEY` | required for `anthropic`; if empty, drafts silently use OpenAI |
+| `ANTHROPIC_MODEL` | default `claude-haiku-5-5` (low cost); e.g. `claude-sonnet-5-5` for higher quality |
+
+Claude call: structured JSON output (voice_reply / email_subject / email_body), `max_tokens` 1000,
+**thinking disabled** (default thinking used up the budget and cut the JSON off), system prompt
+cached (~12.9k tokens read from cache per call), no `temperature` (not an API parameter).
+Live check 2026-11-16: 12/12 valid drafts, p50 2.9 s (GPT-4o 1.6–3.4 s). Roll back: `LLM_PROVIDER=openai`.
+
 ## 11. Known limitations
 
 - No separate dev/staging Supabase: local development uses production (see the warning in section 1).

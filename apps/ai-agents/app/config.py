@@ -38,6 +38,16 @@ class Settings(BaseSettings):
     openai_api_key: str = Field(..., description="OpenAI API key for GPT-4o response agent")
     openai_model: str = Field(default="gpt-4o", description="OpenAI model id")
 
+    llm_provider: Literal["openai", "anthropic"] = Field(
+        default="openai",
+        description="Draft writer: openai (original GPT-4o) or anthropic (Claude). "
+        "Embeddings always use OpenAI.",
+    )
+    anthropic_api_key: str = Field(default="", description="Anthropic API key (Claude)")
+    anthropic_model: str = Field(
+        default="claude-haiku-5-5", description="Claude model for drafts (low-cost default)"
+    )
+
     policy_version: str = Field(default="1.0.0", description="warranty_policy.__POLICY_VERSION__")
 
     knowledge_source: Literal["static", "vector"] = Field(
@@ -102,6 +112,16 @@ class Settings(BaseSettings):
             "unknown CATALOG_SOURCE=%r — using 'off' (catalogue off)", value
         )
         return "off"
+
+    @field_validator("llm_provider", mode="before")
+    @classmethod
+    def _lenient_llm_provider(cls, value: object) -> str:
+        """A typo in the provider flag must not stop drafting — fall back to openai."""
+        normalized = str(value).strip().lower()
+        if normalized in ("openai", "anthropic"):
+            return normalized
+        logging.getLogger(__name__).warning("unknown LLM_PROVIDER=%r — using 'openai'", value)
+        return "openai"
 
     @field_validator("gap_log", mode="before")
     @classmethod
