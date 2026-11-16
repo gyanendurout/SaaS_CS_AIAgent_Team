@@ -22,7 +22,7 @@ TOOLS = [json.loads(p.read_text(encoding="utf-8")) for p in sorted((CFG / "tools
 
 key = next(l.split("=", 1)[1].strip().strip('"') for l in (ROOT / ".env.local").read_text(encoding="utf-8").splitlines()
            if l.startswith("OPENAI_API_KEY="))
-client = OpenAI(api_key=key)
+client = OpenAI(api_key=key, max_retries=6)  # shares the org TPM limit with production: go slow
 
 REFUSAL = re.compile(r"only help with JOOLA|can only help|JOOLA[- ]related|info@joola\.com|help with (questions related to )?JOOLA|assist with JOOLA", re.I)
 
@@ -82,7 +82,7 @@ def run(case: tuple[str, str, str]) -> tuple[str, str, str, str]:
     return label, "PASS" if ok else "FAIL", ",".join(calls) or "-", reply.replace("\n", " ")[:110]
 
 
-with ThreadPoolExecutor(6) as pool:
+with ThreadPoolExecutor(2) as pool:
     results = list(pool.map(run, CASES))
 from collections import defaultdict
 agg = defaultdict(list)
