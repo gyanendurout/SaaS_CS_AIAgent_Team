@@ -24,6 +24,10 @@ steps, open decisions, roadmap). How to run/deploy: [docs/CS_MEMORY_RUNBOOK.md](
   `cd apps/ai-agents && .venv/Scripts/python scripts/voice_scope_eval.py` (expect 69/69) before
   applying to Vapi — it caught over-refusals and an invented "ships to Canada". Apply prompt changes
   with the tested `pnpm vapi:fix-*` scripts (dry run first), never by hand-editing in the dashboard.
+- ai-agents dependencies: after changing `apps/ai-agents/pyproject.toml`, run `uv lock` and commit
+  `uv.lock`. Vercel installs with `uv sync --frozen` (lock only) — a missing lock entry crashed
+  production on 2026-11-16 (guard: `app/tests/test_packaging.py`). Before pushing a dependency
+  change, reproduce the install in a fresh env and import `app.main`.
 - Order numbers / emails reaching Supabase filters must go through `OrderNumberField` /
   `EmailField` (`apps/api/src/types/tools.ts`) and `escapeLike()` — never interpolate raw input.
 

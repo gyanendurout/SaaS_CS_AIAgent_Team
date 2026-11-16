@@ -230,6 +230,7 @@ Notes:
 
 | Symptom | Cause / fix |
 |---|---|
+| ai-agents `/health` 500 `FUNCTION_INVOCATION_FAILED` right after a deploy | a dependency in `pyproject.toml` missing from `uv.lock` (Vercel uses `uv sync --frozen`) | `cd apps/ai-agents && uv lock`, commit `uv.lock`, push; `test_packaging.py` catches this |
 | `enabled:false` | `KNOWLEDGE_SOURCE` not `vector`, or ai-agents not restarted / redeployed |
 | `enabled:false` + `error: upstream_unavailable`, ai-agents logs 401 | `AI_AGENTS_SECRET` differs between API and ai-agents (or set on only one) — check `/health` → `internal_auth` |
 | Code change not visible locally | uvicorn `--reload` missed it (Windows) — restart ai-agents |
