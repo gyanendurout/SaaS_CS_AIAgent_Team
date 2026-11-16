@@ -68,6 +68,17 @@ class Settings(BaseSettings):
     shopify_admin_client_secret: str = Field(
         default="", description="Shopify app client secret (client-credentials token grant)"
     )
+    knowledge_cache_ttl_s: int = Field(
+        default=0, ge=0, le=86400,
+        description="Seconds a non-empty knowledge search is reused for the same normalised "
+        "question (saves an embedding + DB search per repeat). 0 = off (original behaviour)",
+    )
+    gap_log: Literal["off", "on"] = Field(
+        default="off", description="on = log unanswered voice-tool questions to kb_gaps"
+    )
+    gaps_api_key: str = Field(
+        default="", description="X-Gaps-Key for GET /reports/gaps; unset = report hidden (404)"
+    )
     order_sample_email_domains: str = Field(
         default="",
         description="Comma list of email domains shown in full on the demo order cards; "
@@ -91,6 +102,13 @@ class Settings(BaseSettings):
             "unknown CATALOG_SOURCE=%r — using 'off' (catalogue off)", value
         )
         return "off"
+
+    @field_validator("gap_log", mode="before")
+    @classmethod
+    def _lenient_gap_log(cls, value: object) -> str:
+        """A typo in the gap-log flag must not stop the service — fall back to off."""
+        normalized = str(value).strip().lower()
+        return normalized if normalized in ("off", "on") else "off"
 
     @field_validator("order_source", mode="before")
     @classmethod

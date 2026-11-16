@@ -16,7 +16,7 @@ from fastapi import FastAPI
 from app import __version__
 from app.config import get_settings
 from app.graph.build import get_compiled_graph
-from app.routes import health, pipeline, tools
+from app.routes import health, pipeline, reports, tools
 
 
 def _configure_logging(level: str) -> None:
@@ -60,3 +60,4 @@ app = FastAPI(
 app.include_router(health.router)
 app.include_router(pipeline.router)
 app.include_router(tools.router)
+app.include_router(reports.router)

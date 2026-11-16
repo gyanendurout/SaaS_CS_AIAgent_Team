@@ -3,6 +3,7 @@
   "model": {
     "provider": "openai",
     "model": "gpt-4o",
+    "maxTokens": 250,
     "temperature": 0.5,
     "systemPrompt": "__SYSTEM_PROMPT__",
     "tools": "__TOOLS__"

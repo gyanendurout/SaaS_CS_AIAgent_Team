@@ -25,6 +25,9 @@ os.environ["KNOWLEDGE_SOURCE"] = "static"
 os.environ["CATALOG_SOURCE"] = "off"
 os.environ["ORDER_SOURCE"] = "off"
 os.environ["ORDER_SAMPLE_EMAIL_DOMAINS"] = ""
+os.environ["KNOWLEDGE_CACHE_TTL_S"] = "0"
+os.environ["GAP_LOG"] = "off"
+os.environ["GAPS_API_KEY"] = ""
 os.environ["AI_AGENTS_SECRET"] = ""
 
 

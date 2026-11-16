@@ -14,7 +14,10 @@
     "vapi:add-tool:apply": "tsx src/add-tool.ts --apply",
     "vapi:fix-brand-voice": "tsx src/fix-brand-voice.ts",
     "vapi:fix-brand-voice:apply": "tsx src/fix-brand-voice.ts --apply",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "vapi:fix-scope": "tsx src/fix-scope.ts",
+    "vapi:fix-scope:apply": "tsx src/fix-scope.ts --apply",
+    "test": "tsx --test src/*.test.ts"
   },
   "dependencies": {
     "dotenv": "^16.4.5"

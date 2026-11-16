@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
+import time
 from functools import lru_cache
 from typing import Any
 
@@ -18,6 +20,7 @@ from app.config import get_settings
 from app.memory.store import SupabaseKnowledgeStore
 from app.services.openai_client import get_openai
 from app.services.supabase_client import get_supabase
+from app.textguard import clean_text
 
 log = logging.getLogger(__name__)
 
@@ -31,6 +34,24 @@ SEARCH_BUDGET_S = 4.0
 # stops *waiting*; this makes the worker thread itself give up, so a hung database
 # can't pile up threads that the claim pipeline also needs (asyncio.to_thread pool).
 DB_TIMEOUT_S = 3.0
+
+
+# Repeat-question cache (KNOWLEDGE_CACHE_TTL_S > 0): the same normalised question
+# reuses the last non-empty result — no embedding call, no DB search. Ported from
+# the Shopify chatbot's answer cache policy: empty answers are never cached.
+CACHE_MAX = 1000
+_cache: dict[tuple[str, int], tuple[float, list[dict[str, Any]]]] = {}
+_NON_WORD = re.compile(r"[^\w\s]")
+
+
+def cache_key(query: str) -> str:
+    """'How long is the JOOLA warranty?' == 'how long is the julia   warranty'."""
+    text = normalize_brand(clean_text(query)).lower()
+    return " ".join(_NON_WORD.sub(" ", text).split())
+
+
+def clear_cache() -> None:
+    _cache.clear()
 
 
 @lru_cache(maxsize=1)
@@ -70,14 +91,25 @@ async def search_knowledge(query: str, k: int = DEFAULT_K) -> list[dict[str, Any
     if get_settings().knowledge_source != "vector" or not query.strip():
         return []
 
+    ttl = get_settings().knowledge_cache_ttl_s
+    key = (cache_key(query), k)
+    hit = _cache.get(key) if ttl else None
+    if hit and time.monotonic() - hit[0] < ttl:
+        return hit[1]
+
     def _search() -> list[dict[str, Any]]:
         return get_store().match(embed_query(normalize_brand(query)), k, MIN_SCORE)
 
     try:
-        return await asyncio.wait_for(asyncio.to_thread(_search), timeout=SEARCH_BUDGET_S)
+        hits = await asyncio.wait_for(asyncio.to_thread(_search), timeout=SEARCH_BUDGET_S)
     except TimeoutError:
         log.warning("knowledge search exceeded %.1fs; continuing without memory", SEARCH_BUDGET_S)
         return []
     except Exception:
         log.warning("knowledge search failed; continuing without memory", exc_info=True)
         return []
+    if ttl and hits:
+        if len(_cache) >= CACHE_MAX:
+            _cache.clear()  # simple bound; warm instances refill within minutes
+        _cache[key] = (time.monotonic(), hits)
+    return hits

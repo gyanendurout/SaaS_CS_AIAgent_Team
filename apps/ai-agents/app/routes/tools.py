@@ -21,15 +21,19 @@ import logging
 from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.catalog.service import catalog_enabled, search_products
 from app.config import get_settings
 from app.deps import require_internal_secret
+from app.gaps import record_gap
 from app.graph.build import get_compiled_graph
 from app.graph.state import PipelineState
 from app.memory.service import search_knowledge
 from app.orders.service import get_order_status, list_live_orders, orders_enabled
+from app.textguard import clean_optional
+
+ORDER_GAP_STATUSES = {"not_found", "invalid_order_number", "too_many_attempts"}
 from app.services.audit import write_case_event
 from app.services.supabase_client import get_supabase
 from warranty_policy import ClaimInput, DecisionResult, evaluate
@@ -333,6 +337,8 @@ class SearchKnowledgeRequest(BaseModel):
     query: str = Field(..., min_length=1, max_length=500)
     k: int = Field(default=3, ge=1, le=8)
 
+    _clean = field_validator("query", mode="before")(clean_optional)
+
 
 class KnowledgeHit(BaseModel):
     source: str
@@ -355,6 +361,8 @@ async def search_knowledge_route(req: SearchKnowledgeRequest) -> SearchKnowledge
     """``enabled=false`` while KNOWLEDGE_SOURCE=static — callers fall back to built-in knowledge."""
     enabled = get_settings().knowledge_source == "vector"
     hits = await search_knowledge(req.query, k=req.k) if enabled else []
+    if enabled and not hits:
+        await record_gap("search_knowledge", "knowledge_empty", query=req.query)
     return SearchKnowledgeResponse(enabled=enabled, results=[KnowledgeHit(**h) for h in hits])
 
 
@@ -367,6 +375,8 @@ class SearchProductsRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     query: str = Field(..., min_length=1, max_length=200)
     limit: int = Field(default=5, ge=1, le=10)
+
+    _clean = field_validator("query", mode="before")(clean_optional)
 
 
 class ProductVariant(BaseModel):
@@ -401,6 +411,8 @@ async def search_products_route(req: SearchProductsRequest) -> SearchProductsRes
     """``enabled=false`` while CATALOG_SOURCE=off — callers answer without live stock/price."""
     enabled = catalog_enabled()
     found = await search_products(req.query, limit=req.limit) if enabled else []
+    if enabled and not found:
+        await record_gap("search_products", "products_empty", query=req.query)
     return SearchProductsResponse(enabled=enabled, results=[Product(**p) for p in found])
 
 
@@ -410,6 +422,8 @@ class GetOrderStatusRequest(BaseModel):
     order_number: str = Field(..., min_length=1, max_length=40)
     email: str | None = Field(default=None, max_length=254)
     postcode: str | None = Field(default=None, max_length=16)
+
+    _clean = field_validator("order_number", "email", "postcode", mode="before")(clean_optional)
 
 
 class OrderItem(BaseModel):
@@ -454,6 +468,11 @@ class GetOrderStatusResponse(BaseModel):
 async def get_order_status_route(req: GetOrderStatusRequest) -> GetOrderStatusResponse:
     """``enabled=false`` while ORDER_SOURCE=off — callers fall back to lookup_order."""
     result = await get_order_status(req.order_number, email=req.email, postcode=req.postcode)
+    if result["status"] in ORDER_GAP_STATUSES:
+        # Never the email/postcode — only the order-number digits and the outcome.
+        digits = "".join(ch for ch in req.order_number if ch.isdigit())
+        await record_gap("get_order_status", f"order_{result['status']}",
+                         detail={"order_number": digits, "status": result["status"]})
     order = OrderStatus(**result["order"]) if result["order"] else None
     return GetOrderStatusResponse(enabled=orders_enabled(), status=result["status"], order=order)
 

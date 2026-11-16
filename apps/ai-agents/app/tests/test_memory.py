@@ -358,6 +358,8 @@ def test_default_sources_are_the_reviewed_knowledge_files() -> None:
         "knowledge/shopify/cs_product_guidance.md",
         "knowledge/shopify/cs_shipping_and_returns.md",
         "knowledge/shopify/paddle_registration.md",
+        # Written only from policy §2.1–2.3, 2.5, 2.8, 4.5; owner-approved 2026-11-14.
+        "knowledge/warranty/paddle_damage_and_defects.md",
     ]
     # Pending CS confirmation that it is real policy (trade-in credit, demo deposit).
     assert not any("internal_policies" in n for n in names)
