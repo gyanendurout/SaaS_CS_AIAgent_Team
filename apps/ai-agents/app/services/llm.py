@@ -10,6 +10,7 @@ so drafting never stops. Embeddings stay on OpenAI (Anthropic has no embeddings 
 
 from __future__ import annotations
 
+import json
 import logging
 from functools import lru_cache
 from typing import Any
@@ -27,10 +28,18 @@ ANTHROPIC_TIMEOUT_S = 45.0
 
 DRAFT_SCHEMA: dict[str, Any] = {
     "type": "object",
+    # Every field must be filled whatever the channel (live QA: Claude left voice_reply
+    # empty on email claims; GPT-4o always filled it and the dashboard shows all three).
     "properties": {
-        "voice_reply": {"type": "string"},
-        "email_subject": {"type": "string"},
-        "email_body": {"type": "string"},
+        "voice_reply": {
+            "type": "string", "minLength": 1,
+            "description": "Always fill: the short spoken version of the reply, even for email "
+            "or web claims.",
+        },
+        "email_subject": {"type": "string", "minLength": 1,
+                          "description": "Always fill: email subject line."},
+        "email_body": {"type": "string", "minLength": 1,
+                       "description": "Always fill: full email reply."},
     },
     "required": ["voice_reply", "email_subject", "email_body"],
     "additionalProperties": False,
@@ -52,27 +61,52 @@ def active_provider() -> str:
     return s.llm_provider
 
 
+class ClaudeOutputError(RuntimeError):
+    """Claude answered, but not with a complete, valid draft."""
+
+
+def _claude_draft(system: str, user: str) -> str:
+    msg = get_anthropic().messages.create(
+        model=get_settings().anthropic_model,
+        max_tokens=DRAFT_MAX_TOKENS,  # no temperature: not a Messages API parameter
+        # The decision is already made by the rules engine; writing the reply needs no
+        # reasoning. With default thinking, hidden reasoning used up max_tokens and the
+        # JSON was cut off (QA 2026-11-16) — off is also cheaper and faster.
+        thinking={"type": "disabled"},
+        system=[{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
+        messages=[{"role": "user", "content": user}],
+        output_config={"format": {"type": "json_schema", "schema": DRAFT_SCHEMA}},
+    )
+    if msg.stop_reason == "max_tokens":
+        raise ClaudeOutputError(f"Claude draft cut off at max_tokens={DRAFT_MAX_TOKENS}")
+    text = "".join(b.text for b in msg.content if getattr(b, "type", "") == "text")
+    if not text:
+        raise ClaudeOutputError(f"Claude returned no text (stop_reason={msg.stop_reason})")
+    try:
+        parsed = json.loads(text)
+    except ValueError as e:
+        raise ClaudeOutputError("Claude draft is not valid JSON") from e
+    if not isinstance(parsed, dict) or not all(
+        isinstance(parsed.get(k), str) and parsed[k].strip() for k in DRAFT_SCHEMA["required"]
+    ):
+        raise ClaudeOutputError("Claude draft has a missing or empty field")
+    return text
+
+
 def draft_reply(system: str, user: str) -> tuple[str, str]:
-    """Return (raw JSON text, model id). Blocking — call via asyncio.to_thread."""
+    """Return (raw JSON text, model id). Blocking — call via asyncio.to_thread.
+
+    A Claude failure (bad/rotated key, rate limit, outage, timeout, cut-off or invalid
+    output) falls back to the OpenAI call once, so a draft is always produced. Bugs in
+    our own code (e.g. TypeError) are not caught and surface normally.
+    """
     s = get_settings()
     if active_provider() == "anthropic":
-        msg = get_anthropic().messages.create(
-            model=s.anthropic_model,
-            max_tokens=DRAFT_MAX_TOKENS,  # no temperature: not a Messages API parameter
-            # The decision is already made by the rules engine; writing the reply needs no
-            # reasoning. With default thinking, hidden reasoning used up max_tokens and the
-            # JSON was cut off (QA 2026-11-16) — off is also cheaper and faster.
-            thinking={"type": "disabled"},
-            system=[{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
-            messages=[{"role": "user", "content": user}],
-            output_config={"format": {"type": "json_schema", "schema": DRAFT_SCHEMA}},
-        )
-        if msg.stop_reason == "max_tokens":
-            raise RuntimeError(f"Claude draft cut off at max_tokens={DRAFT_MAX_TOKENS}")
-        text = "".join(b.text for b in msg.content if getattr(b, "type", "") == "text")
-        if not text:
-            raise RuntimeError(f"Claude returned no text (stop_reason={msg.stop_reason})")
-        return text, s.anthropic_model
+        try:
+            return _claude_draft(system, user), s.anthropic_model
+        except (anthropic.APIError, ClaudeOutputError) as e:
+            log.warning("Claude draft failed (%s: %s) — falling back to OpenAI",
+                        type(e).__name__, str(e)[:200])
 
     chat = get_openai().chat.completions.create(
         model=s.openai_model,

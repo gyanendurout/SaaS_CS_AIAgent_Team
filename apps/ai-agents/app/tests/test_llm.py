@@ -90,6 +90,9 @@ def test_anthropic_provider_uses_cheap_model_schema_cap_and_cache(fakes, monkeyp
     assert call["output_config"]["format"]["type"] == "json_schema"
     assert set(schema["required"]) == {"voice_reply", "email_subject", "email_body"}
     assert schema["additionalProperties"] is False
+    # Live QA: Claude left voice_reply empty on email claims (3/6) — every field must be filled.
+    assert all(schema["properties"][k]["minLength"] == 1 for k in schema["required"])
+    assert "even for email" in schema["properties"]["voice_reply"]["description"]
 
 
 def test_anthropic_without_key_falls_back_to_openai(fakes, monkeypatch) -> None:
@@ -126,8 +129,8 @@ def test_truncated_anthropic_reply_raises_clearly(monkeypatch) -> None:
         model=kw["model"], stop_reason="max_tokens")
     cut.messages = SimpleNamespace(create=cut._create)
     monkeypatch.setattr(llm, "get_anthropic", lambda: cut)
-    with pytest.raises(RuntimeError, match="max_tokens"):
-        llm.draft_reply("SYSTEM", "USER")
+    with pytest.raises(llm.ClaudeOutputError, match="max_tokens"):
+        llm._claude_draft("SYSTEM", "USER")
 
 
 def test_anthropic_reply_without_text_raises(monkeypatch) -> None:
@@ -138,8 +141,8 @@ def test_anthropic_reply_without_text_raises(monkeypatch) -> None:
     empty._create = lambda **kw: SimpleNamespace(content=[], model=kw["model"], stop_reason="refusal")  # type: ignore[method-assign]
     empty.messages = SimpleNamespace(create=empty._create)
     monkeypatch.setattr(llm, "get_anthropic", lambda: empty)
-    with pytest.raises(RuntimeError, match="no text"):
-        llm.draft_reply("SYSTEM", "USER")
+    with pytest.raises(llm.ClaudeOutputError, match="no text"):
+        llm._claude_draft("SYSTEM", "USER")
 
 
 def test_anthropic_call_only_uses_real_sdk_parameters(fakes, monkeypatch) -> None:
@@ -156,3 +159,89 @@ def test_anthropic_call_only_uses_real_sdk_parameters(fakes, monkeypatch) -> Non
     llm.draft_reply("SYSTEM", "USER")
     real = inspect.signature(anthropic.Anthropic(api_key="x").messages.create).parameters
     assert set(an.calls[0]) <= set(real), set(an.calls[0]) - set(real)
+
+
+# ---- runtime fallback: a Claude failure must never stop drafting ------------------ #
+
+
+def _anthropic_on(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("LLM_PROVIDER", "anthropic")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    get_settings.cache_clear()
+
+
+def _raising(exc: Exception) -> _FakeAnthropic:
+    fake = _FakeAnthropic()
+
+    def _create(**kw: Any) -> Any:
+        fake.calls.append(kw)
+        raise exc
+
+    fake.messages = SimpleNamespace(create=_create)
+    return fake
+
+
+def _api_errors() -> list[Exception]:
+    import anthropic
+    import httpx
+
+    req = httpx.Request("POST", "https://api.anthropic.com/v1/messages")
+
+    def status(code: int, cls: type) -> Exception:
+        return cls("boom", response=httpx.Response(code, request=req), body=None)
+
+    return [
+        status(401, anthropic.AuthenticationError),  # rotated / wrong key
+        status(429, anthropic.RateLimitError),
+        status(529, anthropic.InternalServerError),  # overloaded
+        anthropic.APIConnectionError(request=req),
+        anthropic.APITimeoutError(request=req),
+    ]
+
+
+@pytest.mark.parametrize("exc", _api_errors(), ids=lambda e: type(e).__name__)
+def test_claude_api_error_falls_back_to_openai(fakes, monkeypatch, exc: Exception) -> None:
+    _anthropic_on(monkeypatch)
+    oa, _ = fakes
+    broken = _raising(exc)
+    monkeypatch.setattr(llm, "get_anthropic", lambda: broken)
+    raw, model = llm.draft_reply("SYSTEM", "USER")
+    assert json.loads(raw) == REPLY and model == "gpt-4o"
+    assert len(broken.calls) == 1 and len(oa.calls) == 1
+
+
+def test_cut_off_claude_reply_falls_back_to_openai(fakes, monkeypatch) -> None:
+    _anthropic_on(monkeypatch)
+    oa, _ = fakes
+    cut = _FakeAnthropic()
+    cut.messages = SimpleNamespace(create=lambda **kw: SimpleNamespace(
+        content=[SimpleNamespace(type="text", text='{"voice_reply":"I am')],
+        model=kw["model"], stop_reason="max_tokens"))
+    monkeypatch.setattr(llm, "get_anthropic", lambda: cut)
+    _, model = llm.draft_reply("SYSTEM", "USER")
+    assert model == "gpt-4o" and len(oa.calls) == 1
+
+
+def test_claude_invalid_json_falls_back_to_openai(fakes, monkeypatch) -> None:
+    _anthropic_on(monkeypatch)
+    oa, _ = fakes
+    monkeypatch.setattr(llm, "get_anthropic", lambda: _FakeAnthropic(text="not json"))
+    raw, model = llm.draft_reply("SYSTEM", "USER")
+    assert model == "gpt-4o" and json.loads(raw) == REPLY and len(oa.calls) == 1
+
+
+def test_programming_errors_are_not_hidden_by_fallback(fakes, monkeypatch) -> None:
+    """Only provider/output failures fall back; a bug in our own code must surface."""
+    _anthropic_on(monkeypatch)
+    monkeypatch.setattr(llm, "get_anthropic", lambda: _raising(TypeError("bad argument")))
+    with pytest.raises(TypeError):
+        llm.draft_reply("SYSTEM", "USER")
+
+
+def test_claude_empty_field_falls_back_to_openai(fakes, monkeypatch) -> None:
+    _anthropic_on(monkeypatch)
+    oa, _ = fakes
+    empty_voice = json.dumps({**REPLY, "voice_reply": "  "})
+    monkeypatch.setattr(llm, "get_anthropic", lambda: _FakeAnthropic(text=empty_voice))
+    _, model = llm.draft_reply("SYSTEM", "USER")
+    assert model == "gpt-4o" and len(oa.calls) == 1

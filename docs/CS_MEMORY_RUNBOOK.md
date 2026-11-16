@@ -338,7 +338,20 @@ Voice is unaffected (Vapi keeps GPT-4o). Embeddings stay on OpenAI (no Anthropic
 Claude call: structured JSON output (voice_reply / email_subject / email_body), `max_tokens` 1000,
 **thinking disabled** (default thinking used up the budget and cut the JSON off), system prompt
 cached (~12.9k tokens read from cache per call), no `temperature` (not an API parameter).
-Live check 2026-11-16: 12/12 valid drafts, p50 2.9 s (GPT-4o 1.6–3.4 s). Roll back: `LLM_PROVIDER=openai`.
+Every field has `minLength: 1` (Claude left `voice_reply` empty on email claims otherwise).
+**Runtime fallback:** any Claude failure — wrong/rotated key (401), rate limit, overload, timeout,
+cut-off or invalid/empty output — writes the draft with OpenAI instead (log: "Claude draft failed …
+falling back to OpenAI"). Our own bugs are not swallowed.
+
+**Live test:** `cd apps/ai-agents && .venv/Scripts/python scripts/draft_eval.py anthropic 3`
+(6 decisions × 3 channels + 8 hard inputs: injection, rant, Spanish, profanity, emoji, one word,
+fake approval, foreign email; checks JSON, empty fields, promises on denied claims, "approved"
+before review, prompt leaks, foreign emails, voice length). Expect 0 failures.
+
+Results 2026-11-16: Claude 78/78 (p50 2.4 s, p95 3.3 s; all by Claude, no fallbacks); GPT-4o 26/26
+(p50 1.6 s); 15 parallel Claude drafts 15/15 in 3.5 s; invalid key → GPT-4o draft; real response
+node with in-memory DB → `pending_approval` draft, event `model=claude-haiku-5-5`. Checker
+meta-test: catches 8/8 planted bad drafts. Roll back: `LLM_PROVIDER=openai`.
 
 ## 11. Known limitations
 
