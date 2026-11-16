@@ -20,6 +20,10 @@ steps, open decisions, roadmap). How to run/deploy: [docs/CS_MEMORY_RUNBOOK.md](
 - `/api/tools/*` is reachable **only** through the signed Vapi webhook (in-process inject with a
   per-boot token, `apps/api/src/lib/internal-tools.ts`); direct calls get 403. For local manual
   testing set `TOOL_ROUTES_OPEN=true` in `apps/api/.env.local` — never in Vercel.
+- After ANY change to the voice prompt or tool descriptions (`packages/vapi-assistant-config/`), run
+  `cd apps/ai-agents && .venv/Scripts/python scripts/voice_scope_eval.py` (expect 69/69) before
+  applying to Vapi — it caught over-refusals and an invented "ships to Canada". Apply prompt changes
+  with the tested `pnpm vapi:fix-*` scripts (dry run first), never by hand-editing in the dashboard.
 - Order numbers / emails reaching Supabase filters must go through `OrderNumberField` /
   `EmailField` (`apps/api/src/types/tools.ts`) and `escapeLike()` — never interpolate raw input.
 

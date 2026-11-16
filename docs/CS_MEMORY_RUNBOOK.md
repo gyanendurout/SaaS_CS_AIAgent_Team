@@ -309,6 +309,21 @@ token generated at boot). Direct HTTP calls → 403 `forbidden`. Local manual te
 `TOOL_ROUTES_OPEN=true` in `apps/api/.env.local` (never in Vercel). To test the real path, send a
 signed `tool-calls` message to `/webhooks/vapi`.
 
+### 10d. Voice guardrails and token savings
+
+| Piece | Where | Switch / command |
+|---|---|---|
+| Off-topic refusal, injection rules, short small talk, shipping always looked up | Vapi prompt `## SCOPE AND SAFETY` (`apps/vapi-setup/src/fix-scope.ts`) | `pnpm vapi:fix-scope` (dry run) / `:apply`; restore = PATCH `{ model }` from `backups/*-scope.json` |
+| Reply cap | Vapi `model.maxTokens = 250` | same script (only lowers) |
+| Behaviour test (GPT-4o, 23 cases × 3) | `apps/ai-agents/scripts/voice_scope_eval.py [prompt.md]` | run before every prompt change; expect 69/69; uses the shared OpenAI org rate limit — runs 2 at a time |
+| Input cleaning (control / zero-width chars, whitespace) | ai-agents tool request models (`app/textguard.py`) | always on |
+| Repeat-question cache (no embedding/DB search on repeats; empty answers never cached) | `app/memory/service.py` | `KNOWLEDGE_CACHE_TTL_S` (0 = off; 3600 recommended) |
+| Gap log (knowledge_empty, products_empty, order_not_found / invalid / too_many_attempts — never email/postcode) | `app/gaps.py`, table `kb_gaps` | apply `migrations/memory/0002_kb_gaps.up.sql`, then `GAP_LOG=on` |
+| Gap report | `GET https://joola-cs-ai-agents.vercel.app/reports/gaps?days=7&limit=100` header `X-Gaps-Key` | `GAPS_API_KEY` (unset → 404, wrong → 401) |
+
+Voice note: Vapi's GPT-4o runs on every turn (it *is* the conversation), so repeats can't skip
+the model; savings come from the reply cap, small tool results and the knowledge cache.
+
 ## 11. Known limitations
 
 - No separate dev/staging Supabase: local development uses production (see the warning in section 1).
