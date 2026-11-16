@@ -31,15 +31,16 @@ from app.graph.build import get_compiled_graph
 from app.graph.state import PipelineState
 from app.memory.service import search_knowledge
 from app.orders.service import get_order_status, list_live_orders, orders_enabled
-from app.textguard import clean_optional
-
-ORDER_GAP_STATUSES = {"not_found", "invalid_order_number", "too_many_attempts"}
 from app.services.audit import write_case_event
 from app.services.supabase_client import get_supabase
+from app.textguard import clean_optional
 from warranty_policy import ClaimInput, DecisionResult, evaluate
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/tools", tags=["tools"])
+
+# get_order_status outcomes logged to the gap log (never with the email).
+ORDER_GAP_STATUSES = {"not_found", "invalid_order_number", "invalid_email"}
 
 
 # --------------------------------------------------------------------------- #
@@ -419,11 +420,12 @@ async def search_products_route(req: SearchProductsRequest) -> SearchProductsRes
 class GetOrderStatusRequest(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
-    order_number: str = Field(..., min_length=1, max_length=40)
+    # Either one is enough (owner decision 2026-11-16). ``postcode`` from an older Vapi
+    # tool version is ignored (extra="ignore").
+    order_number: str | None = Field(default=None, max_length=40)
     email: str | None = Field(default=None, max_length=254)
-    postcode: str | None = Field(default=None, max_length=16)
 
-    _clean = field_validator("order_number", "email", "postcode", mode="before")(clean_optional)
+    _clean = field_validator("order_number", "email", mode="before")(clean_optional)
 
 
 class OrderItem(BaseModel):
@@ -458,6 +460,7 @@ class GetOrderStatusResponse(BaseModel):
     enabled: bool
     status: str
     order: OrderStatus | None
+    other_orders: list[str] = Field(default_factory=list)
 
 
 @router.post(
@@ -467,14 +470,16 @@ class GetOrderStatusResponse(BaseModel):
 )
 async def get_order_status_route(req: GetOrderStatusRequest) -> GetOrderStatusResponse:
     """``enabled=false`` while ORDER_SOURCE=off — callers fall back to lookup_order."""
-    result = await get_order_status(req.order_number, email=req.email, postcode=req.postcode)
+    result = await get_order_status(req.order_number, email=req.email)
     if result["status"] in ORDER_GAP_STATUSES:
-        # Never the email/postcode — only the order-number digits and the outcome.
-        digits = "".join(ch for ch in req.order_number if ch.isdigit())
+        # Never the email — only the order-number digits (if any), how it was asked, the outcome.
+        digits = "".join(ch for ch in (req.order_number or "") if ch.isdigit())
         await record_gap("get_order_status", f"order_{result['status']}",
-                         detail={"order_number": digits, "status": result["status"]})
+                         detail={"order_number": digits, "status": result["status"],
+                                 "by": "order_number" if digits else "email"})
     order = OrderStatus(**result["order"]) if result["order"] else None
-    return GetOrderStatusResponse(enabled=orders_enabled(), status=result["status"], order=order)
+    return GetOrderStatusResponse(enabled=orders_enabled(), status=result["status"], order=order,
+                                  other_orders=result.get("other_orders", []))
 
 
 class LiveOrdersRequest(BaseModel):

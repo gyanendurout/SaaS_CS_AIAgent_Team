@@ -3,7 +3,8 @@
  *
  * Live order status from Shopify (Team JOOLA sandbox, via ai-agents): payment
  * and fulfilment status, items, carrier + tracking, returns. The caller must
- * give the email or postcode on the order; a mismatch answers `not_found`.
+ * give the order number OR the email — either is enough. By email, the newest order
+ * is returned plus up to 2 more order numbers.
  * No personal data (email, address, phone) is ever returned.
  *
  * Never fails the call: if ai-agents is unreachable or ORDER_SOURCE=off it
@@ -28,7 +29,7 @@ const route: FastifyPluginAsync = async (app) => {
 
     try {
       const result = await app.aiAgents.getOrderStatus(parsed.data);
-      // Log the outcome only — never the email/postcode the caller gave.
+      // Log the outcome only — never the email the caller gave.
       log.info({ enabled: result.enabled, status: result.status }, 'get_order_status');
       return reply.send(result);
     } catch (err) {

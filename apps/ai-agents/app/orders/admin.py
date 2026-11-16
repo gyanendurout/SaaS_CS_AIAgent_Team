@@ -1,14 +1,13 @@
 """Shopify Admin GraphQL client for order status (read-only).
 
-Uses the chatbot's Shopify app (``joola-ai-chatbot``) on the Team JOOLA sandbox
-store. The token comes from the client-credentials grant (valid ~24 h) and is
-cached until shortly before it expires; a 401 refreshes it once.
+Uses the dedicated ``JOOLA CS Agent`` app on the Team JOOLA sandbox store. The
+token comes from the client-credentials grant (valid ~24 h) and is cached until
+shortly before it expires; a 401 refreshes it once.
 
 The order-number rule (3+ digits, optional ``#``) and the order/tracking field
-mapping are ported from the chatbot's ``order_service.py``. Unlike the chatbot
-there is no signed-in customer, so the caller must prove the order is theirs
-(email or postcode on the order) — see ``verify_caller``. Personal data is used
-only for that check and never leaves this module.
+mapping are ported from the chatbot's ``order_service.py``. Lookup is by order
+number OR email (owner decision 2026-11-16 — no second check, no ZIP); addresses
+are not fetched at all, and the email is only used to match orders, never returned.
 """
 
 from __future__ import annotations
@@ -32,9 +31,29 @@ query OrderStatus($q: String!) {
       cancelledAt
       displayFinancialStatus
       displayFulfillmentStatus
+      lineItems(first: 20) { nodes { title quantity } }
+      fulfillments(first: 10) {
+        displayStatus
+        trackingInfo(first: 5) { company number url }
+      }
+      returns(first: 5) { nodes { name status } }
+    }
+  }
+}
+"""
+
+# A customer's orders by email, newest first. Shopify's search can be loose, so the
+# email is fetched only to keep exact matches; it is never returned to callers.
+EMAIL_QUERY = """
+query OrdersByEmail($q: String!) {
+  orders(first: 10, query: $q, sortKey: CREATED_AT, reverse: true) {
+    nodes {
+      name
+      createdAt
+      cancelledAt
+      displayFinancialStatus
+      displayFulfillmentStatus
       email
-      shippingAddress { zip }
-      billingAddress { zip }
       lineItems(first: 20) { nodes { title quantity } }
       fulfillments(first: 10) {
         displayStatus
@@ -80,29 +99,15 @@ def parse_order_number(spoken: str) -> str | None:
     return digits if 3 <= len(digits) <= _MAX_DIGITS else None
 
 
-def _norm_email(value: str | None) -> str:
-    return (value or "").strip().lower()
+# Plain addresses only: no quotes, spaces, brackets or backslashes, so the value can be
+# placed inside Shopify's search syntax without changing the query.
+_SAFE_EMAIL = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+")
 
 
-def _norm_zip(value: str | None) -> str:
-    """Upper-case, no spaces; US ZIP+4 compares on the first five digits."""
-    cleaned = re.sub(r"\s", "", (value or "")).upper()
-    us = re.fullmatch(r"(\d{5})-?\d{4}", cleaned)
-    return us.group(1) if us else cleaned
-
-
-def verify_caller(order: dict[str, Any], *, email: str | None, postcode: str | None) -> bool:
-    """True only if the caller's email or postcode matches the order."""
-    given_email = _norm_email(email)
-    if given_email and given_email == _norm_email(order.get("email")):
-        return True
-    given_zip = _norm_zip(postcode)
-    if not given_zip:
-        return False
-    on_order = {
-        _norm_zip((order.get(kind) or {}).get("zip")) for kind in ("shippingAddress", "billingAddress")
-    }
-    return given_zip in on_order - {""}
+def parse_email(value: str | None) -> str | None:
+    """Lower-cased email if it is a plain, safe address; otherwise None."""
+    text = (value or "").strip().lower()
+    return text if len(text) <= 254 and _SAFE_EMAIL.fullmatch(text) else None
 
 
 def mask_email(email: str | None, *, allow: frozenset[str]) -> str | None:
@@ -217,6 +222,14 @@ class AdminClient:
             if re.sub(r"\D", "", str(node.get("name") or "")) == number:
                 return dict(node)
         return None
+
+    async def find_orders_by_email(self, email: str, limit: int) -> list[dict[str, Any]]:
+        """Newest orders whose email is exactly ``email`` (already validated by parse_email)."""
+        async with asyncio.timeout(self._deadline):
+            data = await self._graphql(EMAIL_QUERY, {"q": f'email:"{email}"'})
+        nodes = (data.get("orders") or {}).get("nodes") or []
+        exact = [dict(n) for n in nodes if str(n.get("email") or "").strip().lower() == email]
+        return exact[:limit]
 
     async def list_recent_orders(self, limit: int, allow: frozenset[str]) -> list[dict[str, Any]]:
         """Newest orders, status-only, with a masked email hint (demo order cards)."""

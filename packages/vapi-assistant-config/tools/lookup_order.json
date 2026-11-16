@@ -2,7 +2,7 @@
   "type": "function",
   "function": {
     "name": "lookup_order",
-    "description": "Look up an order by order number or by customer email. Returns the order details including product, source (JOOLA direct vs unauthorized retailer), purchase date, and customer info. Call this when the customer mentions an order number or asks about a specific purchase. Provide exactly one of order_number or customer_email.",
+    "description": "For WARRANTY or DAMAGE claims only: look up the order behind a claim by order number or by customer email. Returns the order details including product, source (JOOLA direct vs unauthorized retailer), purchase date, and customer info, which the warranty tools need. Call this when the customer reports a problem with a product (broken, cracked, defective, warranty, replacement). Do NOT use it for order status, shipping, delivery, tracking or returns status — use get_order_status for those. Provide exactly one of order_number or customer_email.",
     "parameters": {
       "type": "object",
       "properties": {

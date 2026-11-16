@@ -285,19 +285,19 @@ needs the Shopify Admin API), using stock inside email/web drafts.
 - **Env:** `ORDER_SOURCE=shopify`, `SHOPIFY_ADMIN_CLIENT_ID`, `SHOPIFY_ADMIN_CLIENT_SECRET` (ai-agents only).
 - **Flow:** Vapi → `POST /api/tools/get_order_status` (API) → `/tools/get_order_status` (ai-agents,
   `X-Internal-Secret`) → Admin GraphQL `orders(query:"name:#<digits>")`.
-- **Caller check:** order number + email **or** postcode on the order. A mismatch answers exactly like
-  a missing order (`not_found`). 5 failed checks per order number (50 overall) in 15 min →
-  `too_many_attempts` (per warm instance).
+- **Lookup (owner decision 2026-11-16):** order number **OR** email — either is enough, no second check,
+  no ZIP. A valid order number wins; otherwise the email returns the newest order plus up to 2 more order
+  numbers (`other_orders`). Emails must be plain addresses (no quotes/spaces/brackets) or the call answers
+  `invalid_email` without reaching Shopify. Addresses are not fetched at all. Trade-off accepted by the
+  owner: anyone who says an order number hears its status (sandbox data).
 - **Returned:** order number, date, payment/fulfilment status, cancelled, items, shipments (carrier,
   tracking), returns. Never email, address, phone or payment details; logs hold outcome only.
-- **Statuses:** `ok`, `not_found`, `needs_verification`, `invalid_order_number`, `too_many_attempts`,
+- **Statuses:** `ok`, `not_found`, `needs_order_number_or_email`, `invalid_order_number`, `invalid_email`,
   `unavailable`, `disabled`. Off/unavailable → the assistant falls back to `lookup_order`.
 - **Shopify app has:** `read_orders`, `read_all_orders`, `read_customers`, `read_fulfillments`, `read_returns`
   (no `write_`). Dev Dashboard apps had no separate protected-data / read-all-orders request: email,
   postcode and full history were readable straight after install (checked 2026-11-14).
   Log line "Shopify denied order fields" = protected data / scope missing.
-- **Brake:** only postcode misses count (5 per order / 50 overall per 15 min); when braked the
-  postcode is ignored but the email still works.
 - **Demo order cards:** `GET /api/customer/live_orders?limit=1..20` → ai-agents `/tools/live_orders`
   (60 s cache). `ORDER_SAMPLE_EMAIL_DOMAINS` = comma list of domains shown in full, `*` = all,
   unset = all masked. Shown on the demo call page ("Order status — real sandbox orders").

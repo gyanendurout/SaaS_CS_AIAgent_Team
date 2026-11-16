@@ -1,27 +1,27 @@
 """Gated live order status used by /tools/get_order_status (voice) and future channels.
 
+Lookup is by order number OR email — either one is enough (owner decision 2026-11-16;
+no ZIP / second check). A valid order number wins; otherwise the email is used.
+
 Never raises. Outcomes (``status``):
-  disabled              ORDER_SOURCE=off or credentials missing (original behaviour)
-  invalid_order_number  fewer than 3 / more than 10 digits
-  needs_verification    no email or postcode given — Shopify is not called
-  not_found             no such order, OR the details don't match (same answer,
-                        so a wrong email can't confirm that an order exists)
-  too_many_attempts     too many failed POSTCODE checks for this order number (or
-                        overall) recently and no email given — a brake on guessing;
-                        applies whether or not the order exists. Email checks still run.
-  unavailable           Shopify failed
-  ok                    ``order`` holds the status-only view (no personal data)
+  disabled                     ORDER_SOURCE=off or credentials missing (original behaviour)
+  needs_order_number_or_email  neither given — Shopify is not called
+  invalid_order_number         order number given (fewer than 3 / more than 10 digits), no email
+  invalid_email                email not a plain address (quotes, spaces, brackets...) — not sent
+  not_found                    no such order / no orders for that email
+  unavailable                  Shopify failed
+  ok                           ``order`` = the order (by email: the newest), status-only view;
+                               ``other_orders`` = up to 2 more order numbers for that email
 """
 
 from __future__ import annotations
 
 import logging
 import time
-from collections import deque
 from typing import Any
 
 from app.config import get_settings
-from app.orders.admin import AdminClient, map_order, parse_order_number, verify_caller
+from app.orders.admin import AdminClient, map_order, parse_email, parse_order_number
 
 log = logging.getLogger(__name__)
 
@@ -84,73 +84,43 @@ async def list_live_orders(limit: int = 10) -> dict[str, Any]:
     return result
 
 
-# Failed-check brake (per warm instance; Vapi calls are signed, so this caps a
-# rogue caller guessing order numbers against a known postcode/email).
-FAIL_WINDOW_S = 900.0
-MAX_FAILS_PER_ORDER = 5
-MAX_FAILS_TOTAL = 50
-_fails: dict[str, deque[float]] = {}
-_fails_total: deque[float] = deque()
+MORE_ORDERS = 2
 
 
-def _recent(times: deque[float], now: float) -> int:
-    while times and now - times[0] > FAIL_WINDOW_S:
-        times.popleft()
-    return len(times)
-
-
-def _blocked(number: str, now: float) -> bool:
-    per_order = _recent(_fails.setdefault(number, deque()), now)
-    return per_order >= MAX_FAILS_PER_ORDER or _recent(_fails_total, now) >= MAX_FAILS_TOTAL
-
-
-def _record_failure(number: str, now: float) -> None:
-    _fails.setdefault(number, deque()).append(now)
-    _fails_total.append(now)
-    if len(_fails) > 5000:  # bound memory; old entries matter less than staying up
-        _fails.clear()
-
-
-def reset_limits() -> None:
-    _fails.clear()
-    _fails_total.clear()
-
-
-def _result(status: str, order: dict[str, Any] | None = None) -> dict[str, Any]:
-    return {"status": status, "order": order}
+def _result(status: str, order: dict[str, Any] | None = None,
+            other_orders: list[str] | None = None) -> dict[str, Any]:
+    return {"status": status, "order": order, "other_orders": other_orders or []}
 
 
 async def get_order_status(
-    order_number: str, *, email: str | None = None, postcode: str | None = None
+    order_number: str | None, *, email: str | None = None
 ) -> dict[str, Any]:
     if not orders_enabled():
         return _result("disabled")
-    number = parse_order_number(order_number)
+    number = parse_order_number(order_number or "")
+    has_email = bool((email or "").strip())
+    if number is None and not has_email:
+        return _result("invalid_order_number" if (order_number or "").strip()
+                       else "needs_order_number_or_email")
+    address = None
     if number is None:
-        return _result("invalid_order_number")
-    if not ((email or "").strip() or (postcode or "").strip()):
-        return _result("needs_verification")
-
-    # Only postcode checks are guessable (a few thousand values), so only postcode
-    # misses count. Once an order is braked, the postcode is ignored and only the
-    # email can prove ownership — a stranger can't lock the real owner out.
-    now = time.monotonic()
-    if _blocked(number, now):
-        if not (email or "").strip():
-            log.warning("order #%s: too many failed postcode checks — refusing for now", number)
-            return _result("too_many_attempts")
-        postcode = None
+        address = parse_email(email)
+        if address is None:
+            return _result("invalid_email")
 
     try:
-        raw = await get_client().find_order(number)
+        client = get_client()
+        if number is not None:
+            raw = await client.find_order(number)
+            found = [raw] if raw else []
+        else:
+            found = await client.find_orders_by_email(address, MORE_ORDERS + 1)  # type: ignore[arg-type]
     except Exception:  # an order-system outage must never break a call
-        log.warning("Shopify order lookup failed for #%s; continuing without it", number,
-                    exc_info=True)
+        log.warning("Shopify order lookup failed (%s); continuing without it",
+                    f"#{number}" if number else "by email", exc_info=True)
         return _result("unavailable")
 
-    if raw is None or not verify_caller(raw, email=email, postcode=postcode):
-        if (postcode or "").strip():
-            _record_failure(number, now)
-        log.info("order #%s: not found or caller details did not match", number)
+    if not found:
+        log.info("order lookup %s: not found", f"#{number}" if number else "by email")
         return _result("not_found")
-    return _result("ok", map_order(raw))
+    return _result("ok", map_order(found[0]), [str(o.get("name")) for o in found[1:]])

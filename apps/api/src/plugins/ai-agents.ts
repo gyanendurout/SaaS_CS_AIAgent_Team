@@ -113,9 +113,11 @@ export interface OrderStatus {
 export interface GetOrderStatusResult {
   /** false while ai-agents runs with ORDER_SOURCE=off. */
   enabled: boolean;
-  /** ok | not_found | needs_verification | invalid_order_number | unavailable | disabled */
+  /** ok | not_found | needs_order_number_or_email | invalid_order_number | invalid_email | unavailable | disabled */
   status: string;
   order: OrderStatus | null;
+  /** By email: up to 2 more order numbers for that customer (newest first). */
+  other_orders?: string[];
 }
 
 export interface LiveOrder extends OrderStatus {
@@ -140,11 +142,7 @@ export interface AiAgentsClient {
   runPipeline(input: PipelineRunInput): Promise<PipelineRunResult>;
   searchKnowledge(query: string): Promise<SearchKnowledgeResult>;
   searchProducts(query: string): Promise<SearchProductsResult>;
-  getOrderStatus(input: {
-    order_number: string;
-    email?: string;
-    postcode?: string;
-  }): Promise<GetOrderStatusResult>;
+  getOrderStatus(input: { order_number?: string; email?: string }): Promise<GetOrderStatusResult>;
   listLiveOrders(limit: number): Promise<LiveOrdersResult>;
 }
 

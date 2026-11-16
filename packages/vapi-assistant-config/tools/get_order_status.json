@@ -2,24 +2,20 @@
   "type": "function",
   "function": {
     "name": "get_order_status",
-    "description": "Live status of a JOOLA web order from the store: payment status, fulfilment status, items, shipments with carrier, tracking number and tracking link, and any returns. Use when the customer asks where their order is, whether it shipped, for tracking, or about a return. First ask for the order number AND either the email address or the postcode used on the order, then call this tool. Returns { enabled, status, order }. status 'ok': give the status in plain words; read a tracking number only if asked, and offer to email the tracking link. 'needs_verification': ask for the email or postcode on the order. 'not_found': say you couldn't match that order number with those details, ask them to check both once, and never say whether the order exists. 'invalid_order_number': ask them to repeat the order number (it has 3 or more digits, e.g. 5301). 'too_many_attempts': say you can't verify by postcode right now and ask for the email address on the order instead. If enabled is false or status is 'unavailable' or 'disabled', use lookup_order instead, or offer to have the team follow up by email. Never read out addresses or payment details.",
+    "description": "Live status of a JOOLA web order from the store: payment status, fulfilment status, items, shipments with carrier, tracking number and tracking link, and any returns. Use this (not lookup_order) whenever the customer asks where their order is, whether it shipped, about delivery, tracking, or a return — including 'can you check my order 5301'. Ask for the order number OR the email address used on the order — either one is enough; do not ask for both and never ask for a ZIP or postcode. Call the tool as soon as you have one of them. Returns { enabled, status, order, other_orders }. status 'ok': give the status in plain words; read a tracking number only if asked, and offer to email the tracking link. If the lookup was by email and other_orders is not empty, say which order you found (its order number and date) and ask if they meant that one or one of the others. 'not_found': say you couldn't find an order with that number (or for that email) and ask them to check it once, or offer to try the other detail. 'invalid_order_number': ask them to repeat the order number (it has 3 or more digits, e.g. 5301). 'invalid_email': ask them to spell the email address again. 'needs_order_number_or_email': ask for the order number or the email on the order. If enabled is false or status is 'unavailable' or 'disabled', use lookup_order instead, or offer to have the team follow up by email. Never read out addresses, emails or payment details.",
     "parameters": {
       "type": "object",
       "properties": {
         "order_number": {
           "type": "string",
-          "description": "The order number as the customer said it, e.g. '5301' or '#5301'."
+          "description": "The order number as the customer said it, e.g. '5301' or '#5301'. Leave empty if they only gave an email."
         },
         "email": {
           "type": "string",
-          "description": "Email address on the order, if the customer gave it."
-        },
-        "postcode": {
-          "type": "string",
-          "description": "Shipping or billing postcode / ZIP on the order, if the customer gave it instead of the email."
+          "description": "Email address used on the order, if the customer gave it instead of (or as well as) the order number."
         }
       },
-      "required": ["order_number"]
+      "required": []
     }
   }
 }

@@ -61,7 +61,9 @@ def test_tools_reject_input_that_is_only_control_characters() -> None:
     client = TestClient(app)
     assert client.post("/tools/search_knowledge", json={"query": "\x00\x01 ​"}).status_code == 422
     assert client.post("/tools/search_products", json={"query": "\x1b\x00"}).status_code == 422
-    assert client.post("/tools/get_order_status", json={"order_number": "\x00"}).status_code == 422
+    # order_number is optional now (order number OR email): control chars clean to nothing
+    r = client.post("/tools/get_order_status", json={"order_number": "\x00"})
+    assert r.status_code == 200 and r.json()["order"] is None
 
 
 def test_tools_clean_query_before_use(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -176,14 +178,15 @@ def test_products_not_found_is_logged(monkeypatch: pytest.MonkeyPatch, gap_rows:
 def test_order_gap_never_stores_email_or_postcode(monkeypatch: pytest.MonkeyPatch, gap_rows: list) -> None:
     import app.routes.tools as tools_mod
 
-    async def _not_found(order_number: str, *, email: str | None = None, postcode: str | None = None) -> dict:
-        return {"status": "not_found", "order": None}
+    async def _not_found(order_number: str | None, *, email: str | None = None) -> dict:
+        return {"status": "not_found", "order": None, "other_orders": []}
 
     monkeypatch.setattr(tools_mod, "get_order_status", _not_found)
     TestClient(app).post("/tools/get_order_status",
                          json={"order_number": "#5301", "email": "pat@example.test", "postcode": "20852"})
     assert gap_rows == [{"channel": "voice", "tool": "get_order_status", "gap_type": "order_not_found",
-                         "query": None, "detail": {"order_number": "5301", "status": "not_found"}}]
+                         "query": None, "detail": {"order_number": "5301", "status": "not_found",
+                                                   "by": "order_number"}}]
     assert "pat@example.test" not in str(gap_rows) and "20852" not in str(gap_rows)
 
 

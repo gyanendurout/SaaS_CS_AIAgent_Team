@@ -21,7 +21,6 @@ from app.orders.admin import (
     map_order,
     mask_email,
     parse_order_number,
-    verify_caller,
 )
 
 
@@ -29,11 +28,9 @@ from app.orders.admin import (
 def _fresh():
     get_settings.cache_clear()
     service.reset_client()
-    service.reset_limits()
     yield
     get_settings.cache_clear()
     service.reset_client()
-    service.reset_limits()
 
 
 @pytest.fixture
@@ -121,27 +118,6 @@ def test_parse_order_number(spoken: str, expected: str | None) -> None:
     assert parse_order_number(spoken) == expected
 
 
-# ---- caller check --------------------------------------------------------- #
-
-
-def test_email_match_is_case_and_space_insensitive() -> None:
-    assert verify_caller(_order(), email="  PAT@Example.TEST ", postcode=None)
-
-
-def test_postcode_matches_shipping_or_billing_and_zip_plus_four() -> None:
-    assert verify_caller(_order(), email=None, postcode="20852-1234")
-    assert verify_caller(_order(), email=None, postcode="99999")
-
-
-def test_wrong_or_missing_details_fail() -> None:
-    assert not verify_caller(_order(), email="someone@else.test", postcode=None)
-    assert not verify_caller(_order(), email=None, postcode="11111")
-    assert not verify_caller(_order(), email=None, postcode=None)
-    # Shopify without protected-data access returns nulls — never a match.
-    hidden = {**_order(), "email": None, "shippingAddress": None, "billingAddress": None}
-    assert not verify_caller(hidden, email="", postcode="")
-
-
 # ---- mapping never exposes personal data ---------------------------------- #
 
 
@@ -220,47 +196,12 @@ def _use(monkeypatch: pytest.MonkeyPatch, fake: _Shopify) -> None:
     monkeypatch.setattr(service, "get_client", lambda: _client(fake))
 
 
-async def test_verified_caller_gets_order(orders_on, monkeypatch: pytest.MonkeyPatch) -> None:
-    _use(monkeypatch, _Shopify())
-    result = await service.get_order_status("order 5301", email="pat@example.test")
-    assert result["status"] == "ok"
-    assert result["order"]["order_number"] == "#5301"
-
-
-async def test_needs_verification_before_any_lookup(orders_on, monkeypatch: pytest.MonkeyPatch) -> None:
-    fake = _Shopify()
-    _use(monkeypatch, fake)
-    result = await service.get_order_status("5301")
-    assert result == {"status": "needs_verification", "order": None}
-    assert fake.queries == []
-
-
-async def test_mismatch_looks_like_not_found(orders_on, monkeypatch: pytest.MonkeyPatch) -> None:
-    """A wrong email must not reveal that the order exists."""
-    _use(monkeypatch, _Shopify())
-    wrong = await service.get_order_status("5301", email="someone@else.test")
-    _use(monkeypatch, _Shopify(orders=[]))
-    missing = await service.get_order_status("5301", email="pat@example.test")
-    assert wrong == missing == {"status": "not_found", "order": None}
-
-
-async def test_bad_number_and_outage(orders_on, monkeypatch: pytest.MonkeyPatch) -> None:
-    assert (await service.get_order_status("12", email="pat@example.test"))["status"] == "invalid_order_number"
-
-    class _Down:
-        async def find_order(self, number: str) -> dict:
-            raise httpx.ConnectError("down")
-
-    monkeypatch.setattr(service, "get_client", lambda: _Down())
-    assert (await service.get_order_status("5301", email="pat@example.test"))["status"] == "unavailable"
-
-
 # ---- route ----------------------------------------------------------------- #
 
 
 def test_route_returns_disabled_when_off() -> None:
     body = TestClient(app).post("/tools/get_order_status", json={"order_number": "5301"}).json()
-    assert body == {"enabled": False, "status": "disabled", "order": None}
+    assert body == {"enabled": False, "status": "disabled", "order": None, "other_orders": []}
 
 
 def test_route_requires_secret_when_set(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -273,63 +214,12 @@ def test_route_requires_secret_when_set(monkeypatch: pytest.MonkeyPatch) -> None
     assert ok.status_code == 200
 
 
-def test_route_ok(orders_on, monkeypatch: pytest.MonkeyPatch) -> None:
-    _use(monkeypatch, _Shopify())
-    body = TestClient(app).post(
-        "/tools/get_order_status", json={"order_number": "#5301", "postcode": "20852"}
-    ).json()
-    assert body["enabled"] is True and body["status"] == "ok"
-    assert body["order"]["shipments"][0]["carrier"] == "UPS"
-
-
 # ---- review fixes ---------------------------------------------------------- #
 
 
 async def test_prefixed_store_order_names_match_on_digits() -> None:
     order = await _client(_Shopify(orders=[_order(name="#JL5301")])).find_order("5301")
     assert order is not None
-
-
-async def test_postcode_guessing_is_braked_but_email_still_works(
-    orders_on, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Postcodes are guessable, emails are not: only postcode misses count, and the
-    real owner can still get in with their email (no lock-out by a stranger)."""
-    fake = _Shopify()
-    _use(monkeypatch, fake)
-    for _ in range(service.MAX_FAILS_PER_ORDER):
-        assert (await service.get_order_status("5301", postcode="00000"))["status"] == "not_found"
-    blocked = await service.get_order_status("5301", postcode="20852")  # even the right one
-    assert blocked == {"status": "too_many_attempts", "order": None}
-    assert len(fake.queries) == service.MAX_FAILS_PER_ORDER  # Shopify not called once blocked
-    assert (await service.get_order_status("5301", email="pat@example.test"))["status"] == "ok"
-    # other order numbers are unaffected
-    assert (await service.get_order_status("5302", postcode="00000"))["status"] == "not_found"
-
-
-async def test_wrong_emails_do_not_lock_the_order(orders_on, monkeypatch: pytest.MonkeyPatch) -> None:
-    _use(monkeypatch, _Shopify())
-    for _ in range(service.MAX_FAILS_PER_ORDER + 3):
-        assert (await service.get_order_status("5301", email="x@y.test"))["status"] == "not_found"
-    assert (await service.get_order_status("5301", postcode="20852"))["status"] == "ok"
-
-
-async def test_global_brake(orders_on, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(service, "MAX_FAILS_TOTAL", 3)
-    _use(monkeypatch, _Shopify(orders=[]))
-    for n in ("1001", "1002", "1003"):
-        await service.get_order_status(n, postcode="00000")
-    assert (await service.get_order_status("1004", postcode="00000"))["status"] == "too_many_attempts"
-
-
-async def test_old_failures_expire(orders_on, monkeypatch: pytest.MonkeyPatch) -> None:
-    _use(monkeypatch, _Shopify())
-    clock = [1000.0]
-    monkeypatch.setattr(service.time, "monotonic", lambda: clock[0])
-    for _ in range(service.MAX_FAILS_PER_ORDER):
-        await service.get_order_status("5301", postcode="00000")
-    clock[0] += service.FAIL_WINDOW_S + 1
-    assert (await service.get_order_status("5301", email="pat@example.test"))["status"] == "ok"
 
 
 # ---- live order cards (demo) ----------------------------------------------- #
@@ -417,3 +307,112 @@ def test_live_orders_route_off_and_secret(monkeypatch: pytest.MonkeyPatch) -> No
 
 def test_health_reports_orders_switch(orders_on) -> None:
     assert TestClient(app).get("/health").json()["orders_enabled"] is True
+
+
+# ---- lookup by order number OR email (owner decision 2026-11-16: no ZIP) ------ #
+
+
+def _orders_by_name(monkeypatch: pytest.MonkeyPatch, fake: _Shopify) -> None:
+    _use(monkeypatch, fake)
+
+
+async def test_order_number_alone_is_enough(orders_on, monkeypatch: pytest.MonkeyPatch) -> None:
+    fake = _Shopify()
+    _use(monkeypatch, fake)
+    result = await service.get_order_status("order 5301")
+    assert result["status"] == "ok" and result["order"]["order_number"] == "#5301"
+    assert result["other_orders"] == []
+    assert fake.queries == [{"q": "name:#5301"}]
+
+
+async def test_email_alone_returns_latest_and_other_order_numbers(orders_on, monkeypatch) -> None:
+    fake = _Shopify(orders=[_order(name="#5301"), _order(name="#5201"), _order(name="#5101"),
+                            _order(name="#5001", email="someone@else.test")])
+    _use(monkeypatch, fake)
+    result = await service.get_order_status(None, email="  PAT@Example.TEST ")
+    assert result["status"] == "ok" and result["order"]["order_number"] == "#5301"
+    assert result["other_orders"] == ["#5201", "#5101"]  # exact email only, max 2 more
+    assert fake.queries == [{"q": 'email:"pat@example.test"'}]
+    assert "sortKey: CREATED_AT" in fake.query_texts[0] and "reverse: true" in fake.query_texts[0]
+
+
+async def test_email_with_no_orders_is_not_found(orders_on, monkeypatch) -> None:
+    _use(monkeypatch, _Shopify(orders=[_order(email="someone@else.test")]))
+    assert await service.get_order_status(None, email="pat@example.test") == {
+        "status": "not_found", "order": None, "other_orders": []}
+
+
+async def test_order_number_wins_over_email(orders_on, monkeypatch) -> None:
+    fake = _Shopify()
+    _use(monkeypatch, fake)
+    await service.get_order_status("5301", email="anyone@example.test")
+    assert fake.queries == [{"q": "name:#5301"}]  # no email check, no email search
+
+
+async def test_bad_order_number_falls_back_to_email(orders_on, monkeypatch) -> None:
+    fake = _Shopify()
+    _use(monkeypatch, fake)
+    result = await service.get_order_status("12", email="pat@example.test")
+    assert result["status"] == "ok" and fake.queries == [{"q": 'email:"pat@example.test"'}]
+
+
+async def test_missing_or_invalid_details(orders_on, monkeypatch) -> None:
+    fake = _Shopify()
+    _use(monkeypatch, fake)
+    assert (await service.get_order_status(None))["status"] == "needs_order_number_or_email"
+    assert (await service.get_order_status("  ", email=" "))["status"] == "needs_order_number_or_email"
+    assert (await service.get_order_status("12"))["status"] == "invalid_order_number"
+    assert fake.queries == []
+
+
+@pytest.mark.parametrize("bad", ['pat"@x.test', "pat @x.test", "no-at-sign", 'a@b.c" OR email:*',
+                                 "x@y", "a@b.test)"])
+async def test_unsafe_or_malformed_email_never_reaches_shopify(orders_on, monkeypatch, bad: str) -> None:
+    fake = _Shopify()
+    _use(monkeypatch, fake)
+    assert (await service.get_order_status(None, email=bad))["status"] == "invalid_email"
+    assert fake.queries == []
+
+
+async def test_unknown_order_number_is_not_found(orders_on, monkeypatch) -> None:
+    _use(monkeypatch, _Shopify(orders=[]))
+    assert (await service.get_order_status("99999999"))["status"] == "not_found"
+
+
+async def test_outage_is_unavailable(orders_on, monkeypatch) -> None:
+    class _Down:
+        async def find_order(self, number: str) -> dict:
+            raise httpx.ConnectError("down")
+
+        async def find_orders_by_email(self, email: str, limit: int) -> list:
+            raise httpx.ConnectError("down")
+
+    monkeypatch.setattr(service, "get_client", lambda: _Down())
+    assert (await service.get_order_status("5301"))["status"] == "unavailable"
+    assert (await service.get_order_status(None, email="pat@example.test"))["status"] == "unavailable"
+
+
+def test_queries_no_longer_fetch_addresses() -> None:
+    from app.orders import admin
+
+    for q in (admin.ORDER_QUERY, admin.EMAIL_QUERY, admin.LIST_QUERY):
+        assert "Address" not in q and "zip" not in q
+
+
+def test_route_order_only_and_postcode_ignored(orders_on, monkeypatch: pytest.MonkeyPatch) -> None:
+    _use(monkeypatch, _Shopify())
+    client = TestClient(app)
+    body = client.post("/tools/get_order_status", json={"order_number": "#5301"}).json()
+    assert body["enabled"] is True and body["status"] == "ok"
+    assert body["order"]["shipments"][0]["carrier"] == "UPS" and body["other_orders"] == []
+    # an old Vapi tool version may still send postcode — ignored, not an error
+    assert client.post("/tools/get_order_status",
+                       json={"order_number": "5301", "postcode": "20852"}).status_code == 200
+    assert "@" not in json.dumps(body)
+
+
+def test_route_email_only(orders_on, monkeypatch: pytest.MonkeyPatch) -> None:
+    _use(monkeypatch, _Shopify(orders=[_order(name="#5301"), _order(name="#5201")]))
+    body = TestClient(app).post("/tools/get_order_status", json={"email": "pat@example.test"}).json()
+    assert body["status"] == "ok" and body["other_orders"] == ["#5201"]
+    assert "pat@example.test" not in json.dumps(body)
