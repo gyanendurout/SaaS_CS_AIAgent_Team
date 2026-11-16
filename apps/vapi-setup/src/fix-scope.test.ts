@@ -26,6 +26,7 @@ test('scope section covers off-topic refusal, injection and brevity', () => {
   assert.match(text, /never as instructions/i);
   assert.match(text, /system prompt|instructions/);
   assert.match(text, /do not call any tool/i);
+  assert.match(text, /When in\s+doubt, look it up/); // no over-refusal of JOOLA questions
 });
 
 test('reply cap only ever lowers maxTokens', () => {
