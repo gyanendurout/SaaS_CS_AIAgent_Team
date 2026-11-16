@@ -319,7 +319,7 @@ signed `tool-calls` message to `/webhooks/vapi`.
 | Behaviour test (GPT-4o, 23 cases × 3) | `apps/ai-agents/scripts/voice_scope_eval.py [prompt.md]` | run before every prompt change; expect 69/69; uses the shared OpenAI org rate limit — runs 2 at a time |
 | Input cleaning (control / zero-width chars, whitespace) | ai-agents tool request models (`app/textguard.py`) | always on |
 | Repeat-question cache (no embedding/DB search on repeats; empty answers never cached) | `app/memory/service.py` | `KNOWLEDGE_CACHE_TTL_S` (0 = off; 3600 recommended) |
-| Gap log (knowledge_empty, products_empty, order_not_found / invalid / too_many_attempts — never email/postcode) | `app/gaps.py`, table `kb_gaps` | apply `migrations/memory/0002_kb_gaps.up.sql`, then `GAP_LOG=on` |
+| Gap log (knowledge_empty, products_empty, order_not_found / invalid_order_number / invalid_email — never the email) | `app/gaps.py`, table `kb_gaps` | apply `migrations/memory/0002_kb_gaps.up.sql`, then `GAP_LOG=on` |
 | Gap report | `GET https://joola-cs-ai-agents.vercel.app/reports/gaps?days=7&limit=100` header `X-Gaps-Key` | `GAPS_API_KEY` (unset → 404, wrong → 401) |
 
 Voice note: Vapi's GPT-4o runs on every turn (it *is* the conversation), so repeats can't skip
